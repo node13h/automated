@@ -322,7 +322,7 @@ attach_to_multiplexer () {
     # TODO Support for screen
 
     local target="${1}"
-    cmd ssh -t -q $(target_as_ssh_arguments "${target}") -- tmux -S "${TMUX_SOCK_PREFIX}-$(logname)" attach
+    cmd ssh -t -q $(target_as_ssh_arguments "${target}") -- tmux -S "${TMUX_SOCK_PREFIX}-\$(logname)" attach
 }
 
 ask_sudo_password () {
