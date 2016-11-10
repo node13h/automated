@@ -473,14 +473,14 @@ main () {
             # TODO Proper sudo password handling!?
             echo "${SUDO_PASSWORD}" | cmd sudo -S -p "" -- "${0}" "${local_args[@]}"
        else
-           cmd "${CMD}"
+           cmd ${CMD}
            msg "Operation completed successfully"
            exit 0
         fi
 
     elif [[ "${#targets[@]}" -gt 0 ]]; then
 
-        remote_args=(--local --call "${CMD}")
+        remote_args=(--local --call "$(quote "${CMD}")")
 
         if is_true "${DEBUG}"; then
             remote_args+=('--verbose')
