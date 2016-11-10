@@ -371,16 +371,17 @@ loadable_files () {
 
 target_as_ssh_arguments () {
     local target="${1}"
-    local address port
+    local username address port
 
-    if [[ "${target}" =~ ^(\[([:0-9A-Fa-f]+)\])(:([0-9]+))?$ ]] ||
-       [[ "${target}" =~ ^(([-.0-9A-Za-z]+))(:([0-9]+))?$ ]]; then
-        address="${BASH_REMATCH[2]}"
-        port="${BASH_REMATCH[4]}"
+    if [[ "${target}" =~ ^((.+)@)?(\[([:0-9A-Fa-f]+)\])(:([0-9]+))?$ ]] ||
+       [[ "${target}" =~ ^((.+)@)?(([-.0-9A-Za-z]+))(:([0-9]+))?$ ]]; then
+        username="${BASH_REMATCH[2]}"
+        address="${BASH_REMATCH[4]}"
+        port="${BASH_REMATCH[6]}"
     else
         return 1
     fi
-    echo "-p ${port:-22} ${address}"
+    echo "${port:+-p ${port} }${username:+-l ${username} }${address}"
 }
 
 in_proper_context () {
