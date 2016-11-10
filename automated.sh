@@ -54,8 +54,8 @@ STDIN = sys.stdin.fileno()
 STDOUT = sys.stdout.fileno()
 STDERR = sys.stderr.fileno()
 
-EXIT_TIMEOUT = 65
-EXIT_SUDO_PASSWORD_NOT_ACCEPTED = 66
+EXIT_TIMEOUT = int(os.environ['EXIT_TIMEOUT'])
+EXIT_SUDO_PASSWORD_NOT_ACCEPTED = int(os.environ['EXIT_SUDO_PASSWORD_NOT_ACCEPTED'])
 
 class Timeout(Exception):
     pass
@@ -386,10 +386,15 @@ target_as_ssh_arguments () {
 
 in_proper_context () {
     if is_true "${SUDO}"; then
-        echo "python <(base64 -d <<< $(pty_helper_script | gzip | base64 -w 0) | gunzip) ${@}"
+        echo "$(remote_vars) python <(base64 -d <<< $(pty_helper_script | gzip | base64 -w 0) | gunzip) ${@}"
     else
-        echo "${@}"
+        echo "$(remote_vars) ${@}"
     fi
+}
+
+remote_vars () {
+    local var
+    echo "EXIT_TIMEOUT=${EXIT_TIMEOUT} EXIT_SUDO_PASSWORD_NOT_ACCEPTED=${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}"
 }
 
 main () {
