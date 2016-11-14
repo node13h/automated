@@ -334,17 +334,19 @@ ask_sudo_password () {
 
 display_usage_and_exit () {
     cat <<EOF
-Usage: ${PROG} [OPTIONS] [[<target[:port]>] ...]
+Usage: ${PROG} [OPTIONS] [[<[USER@]ADDRESS[:PORT]>] ...]
+
+Runs commands on localhost or one or more remote targets.
 
 OPTIONS:
 
-  -s, --sudo                  Use sudo to do the call
-  -c, --call <command>        Command to call. Default is "${CMD}"
-  -i, --inventory <file>      Load list of targets from the file
-  -e, --export <var>          Make var from local environment available on the remote
+  -s, --sudo                  Use sudo to do the calls
+  -c, --call <COMMAND>        Command to call. Default is "${CMD}"
+  -i, --inventory <FILE>      Load list of targets from the FILE
+  -e, --export <VAR>          Make VAR from local environment available on the remote
                               side. May be specified multiple times
-  -l, --load <path>           Load file at specified path before calling
-                              the command; in case path is a directory -
+  -l, --load <PATH>           Load file at specified PATH before calling
+                              the command; in case PATH is a directory -
                               load *.sh from it
   -h, --help                  Display help text and exit
   -v, --verbose               Enable verbose output
