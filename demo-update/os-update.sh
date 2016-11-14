@@ -7,7 +7,7 @@ all () {
             run_in_multiplexer "yum -y update; exit"
             ;;
         "Debian"|"Ubuntu")
-            run_in_multiplexer "apt-get -y update && apt-get -y dist-upgrade; exit"
+            run_in_multiplexer "apt-get -y update && apt-get -y dist-upgrade; apt-get -y autoremove; exit"
             ;;
     esac
 }
