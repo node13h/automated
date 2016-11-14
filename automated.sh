@@ -33,7 +33,7 @@ EXIT_RUNNING_IN_MULTIPLEXER=67
 EXIT_MULTIPLEXER_ALREADY_RUNNING=68
 
 TMUX_SOCK_PREFIX="/tmp/tmux-automated"
-
+EXPORT_VARS=()
 
 pty_helper_script () {
     cat <<"EOF"
@@ -341,6 +341,8 @@ OPTIONS:
   -s, --sudo                  Use sudo to do the call
   -c, --call <command>        Command to call. Default is "${CMD}"
   -i, --inventory <file>      Load list of targets from the file
+  -e, --export <var>          Make var from local environment available on the remote
+                              side. May be specified multiple times
   -l, --load <path>           Load file at specified path before calling
                               the command; in case path is a directory -
                               load *.sh from it
@@ -367,6 +369,18 @@ loadable_files () {
             fi
         done
     fi
+}
+
+env_var_definitions () {
+    local var
+
+    [[ "${#}" -gt 0 ]] || return 0
+
+    for var in "${@}"; do
+        if [[ -n ${!var+set} ]]; then
+            echo "${var}=$(quote "${!var}")"
+        fi
+    done
 }
 
 target_as_ssh_arguments () {
@@ -401,6 +415,7 @@ main () {
     local load_path file_path target inventory_file
     local rc
     local do_attach
+    local var_definition
     local -a local_args=("${@}")
     local -a remote_args=()
     local -a targets=()
@@ -435,6 +450,11 @@ main () {
 
             -c|--call)
                 CMD="${2}"
+                shift
+                ;;
+
+            -e|--export)
+                EXPORT_VARS+=("${2}")
                 shift
                 ;;
 
@@ -507,6 +527,15 @@ main () {
                     # sudo password has to go first!
                     if is_true "${SUDO}"; then
                         echo "${SUDO_PASSWORD}"  # This one will be consumed by the PTY helper
+                    fi
+
+                    if [[ "${#EXPORT_VARS[@]}" -gt 0 ]]; then
+                        echo "# Vars"
+                        msg_debug "Exporting variables"
+                        while read -r var_definition; do
+                            msg_debug "${var_definition}"
+                            echo "${var_definition}"
+                        done < <(env_var_definitions "${EXPORT_VARS[@]}")
                     fi
 
                     echo "# ${PROG}"
