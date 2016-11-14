@@ -429,6 +429,7 @@ main () {
             # TODO Argument to show compiled script
             # TODO --sudo-askpass optional argument (sudo may be passwordless)
             # TODO --sudo-password-on-stdin
+            # TODO --become should imply --sudo and --sudo-askpass
             # TODO Argument to set custom tmux socket path
 
             -h|--help|help|'')
