@@ -478,7 +478,7 @@ main () {
             # TODO Proper sudo password handling!?
             echo "${SUDO_PASSWORD}" | cmd sudo -S -p "" -- "${0}" "${local_args[@]}"
        else
-           cmd ${CMD}
+           cmd eval "${CMD}"
            msg "Operation completed successfully"
            exit 0
         fi
