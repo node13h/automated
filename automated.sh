@@ -317,12 +317,22 @@ run_in_multiplexer () {
     exit "${EXIT_RUNNING_IN_MULTIPLEXER}"
 }
 
+
 attach_to_multiplexer () {
+    local local="${1:-TRUE}"
+    local target="${2:LOCAL HOST}"
+
+    local handler
+
+    if is_true "${LOCAL}"; then
+        handler=(eval)
+    else
+        handler=(ssh -q $(target_as_ssh_arguments "${target}") --)
+    fi
 
     # TODO Support for screen
 
-    local target="${1}"
-    cmd ssh -t -q $(target_as_ssh_arguments "${target}") -- tmux -S "${TMUX_SOCK_PREFIX}-\$(logname)" attach
+    cmd "${handler[@]}" tmux -S "${TMUX_SOCK_PREFIX}-\$(logname)" attach
 }
 
 ask_sudo_password () {
@@ -402,24 +412,110 @@ target_as_ssh_arguments () {
 
 in_proper_context () {
     if is_true "${SUDO}"; then
-        echo "$(remote_vars) python <(base64 -d <<< $(pty_helper_script | gzip | base64 -w 0) | gunzip) ${@}"
+        echo "$(exit_codes) python <(base64 -d <<< $(pty_helper_script | gzip | base64 -w 0) | gunzip) ${@}"
     else
-        echo "$(remote_vars) ${@}"
+        echo "${@}"
     fi
 }
 
-remote_vars () {
+exit_codes () {
     local var
     echo "EXIT_TIMEOUT=${EXIT_TIMEOUT} EXIT_SUDO_PASSWORD_NOT_ACCEPTED=${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}"
 }
 
+execute () {
+    local command="${1}"
+    local target="${2:-LOCAL HOST}"
+
+    local handler args var_definition file_path rc do_attach
+
+    if is_true "${LOCAL}"; then
+        handler=(eval)
+    else
+        handler=(ssh -q $(target_as_ssh_arguments "${target}") --)
+    fi
+
+    # Loop until SUDO password is accepted
+    while true; do
+
+        rc=0
+
+        if is_true "${SUDO}"; then
+            ask_sudo_password "${target}"
+        fi
+
+        msg_debug "Executing on ${target}"
+        {
+            # sudo password has to go first!
+            if is_true "${SUDO}"; then
+                echo "${SUDO_PASSWORD}"  # This one will be consumed by the PTY helper
+            fi
+
+            if is_true "${DEBUG}"; then
+                echo "DEBUG=TRUE"
+            fi
+
+            if [[ "${#EXPORT_VARS[@]}" -gt 0 ]]; then
+                echo "# Vars"
+                msg_debug "Exporting variables"
+                while read -r var_definition; do
+                    msg_debug "${var_definition}"
+                    echo "${var_definition}"
+                done < <(env_var_definitions "${EXPORT_VARS[@]}")
+            fi
+
+            echo "# ${PROG}"
+            msg_debug "Concatenating ${0}"
+            cat "${0}"
+
+            while read -r file_path; do
+                msg_debug "Concatenating ${file_path}"
+                echo "# $(basename ${file_path})"
+                cat "${file_path}"
+                newline
+            done < <(loadable_files "${LOAD_PATH:-}")
+
+            echo "# Facts"
+            echo "get_the_facts"
+
+            echo "# Entry point"
+            echo "${command}"
+
+        } | cmd "${handler[@]}" "$(in_proper_context bash)" || rc=$?
+
+        [[ "${rc}" -eq "${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}" ]] || break
+
+    done
+
+    case "${rc}" in
+        "${EXIT_TIMEOUT}")
+            msg "Timeout while connecting to ${target}"
+            ;;
+
+        "${EXIT_MULTIPLEXER_ALREADY_RUNNING}")
+            msg "Terminal multiplexer appears to be already running. Attaching ..."
+            do_attach=TRUE
+            ;;
+
+        "${EXIT_RUNNING_IN_MULTIPLEXER}")
+            # TODO Support disabling auto attach via commandline args
+            msg_debug "Command is running in multiplexer. Attaching ..."
+            do_attach=TRUE
+            ;;
+        *)
+            # TODO Make exit on fist error optional (will lose exit codes)
+            exit "${rc}"
+            ;;
+    esac
+
+    # TODO FIX attach_to_multiplexer
+    if is_true "${do_attach}"; then
+        attach_to_multiplexer "${target}" || msg "Unable to attach to multiplexer. Perhaps it completed it's job and exited already?"
+    fi
+}
+
 main () {
-    local load_path file_path target inventory_file
-    local rc
-    local do_attach
-    local var_definition
-    local -a local_args=("${@}")
-    local -a remote_args=()
+    local inventory_file
     local -a targets=()
 
     [[ "${#}" -gt 0 ]] || display_usage_and_exit 1
@@ -447,7 +543,7 @@ main () {
                 ;;
 
             -l|--load)
-                load_path="${2}"
+                LOAD_PATH="${2}"
                 shift
                 ;;
 
@@ -484,108 +580,11 @@ main () {
 
     done
 
-    get_the_facts
-
     if is_true "${LOCAL}"; then
-
-        [[ "${#targets[@]}" -eq 0 ]] || msg_debug "Ignoring the ${targets[@]}"
-
-        while read -r file_path; do
-            msg_debug "Loading ${file_path}"
-            source "${file_path}"
-        done < <(loadable_files "${load_path:-}")
-
-        if is_true "${SUDO}"; then
-            ask_sudo_password
-
-            # TODO Proper sudo password handling!?
-            echo "${SUDO_PASSWORD}" | cmd sudo -S -p "" -- "${0}" "${local_args[@]}"
-       else
-           cmd eval "${CMD}"
-           msg "Operation completed successfully"
-           exit 0
-        fi
-
+        execute "${CMD}"
     elif [[ "${#targets[@]}" -gt 0 ]]; then
-
-        remote_args=(--local --call "$(quote "${CMD}")")
-
-        if is_true "${DEBUG}"; then
-            remote_args+=('--verbose')
-        fi
-
         for target in "${targets[@]}"; do
-
-            # Loop until SUDO password is accepted
-            while true; do
-
-                rc=0
-
-                if is_true "${SUDO}"; then
-                    ask_sudo_password "${target}"
-                fi
-
-                msg_debug "Executing on ${target}"
-                {
-                    # sudo password has to go first!
-                    if is_true "${SUDO}"; then
-                        echo "${SUDO_PASSWORD}"  # This one will be consumed by the PTY helper
-                    fi
-
-                    if [[ "${#EXPORT_VARS[@]}" -gt 0 ]]; then
-                        echo "# Vars"
-                        msg_debug "Exporting variables"
-                        while read -r var_definition; do
-                            msg_debug "${var_definition}"
-                            echo "${var_definition}"
-                        done < <(env_var_definitions "${EXPORT_VARS[@]}")
-                    fi
-
-                    echo "# ${PROG}"
-                    msg_debug "Concatenating ${0}"
-                    cat "${0}"
-
-                    while read -r file_path; do
-                        msg_debug "Concatenating ${file_path}"
-                        echo "# $(basename ${file_path})"
-                        cat "${file_path}"
-                        newline
-                    done < <(loadable_files "${load_path:-}")
-
-                    echo "# Entry point"
-                    echo "main ${remote_args[@]}"
-
-                } | cmd ssh -q $(target_as_ssh_arguments "${target}") -- "$(in_proper_context bash)" || rc=$?
-
-                [[ "${rc}" -eq "${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}" ]] || break
-
-            done
-
-            case "${rc}" in
-                "${EXIT_TIMEOUT}")
-                    msg "Timeout while connecting to ${target}"
-                    ;;
-
-                "${EXIT_MULTIPLEXER_ALREADY_RUNNING}")
-                    msg "Terminal multiplexer appears to be already running. Attaching ..."
-                    do_attach=TRUE
-                    ;;
-
-                "${EXIT_RUNNING_IN_MULTIPLEXER}")
-                    # TODO Support disabling auto attach via commandline args
-                    msg_debug "Command is running in multiplexer. Attaching ..."
-                    do_attach=TRUE
-                    ;;
-                *)
-                    # TODO Make exit on fist error optional (will lose exit codes)
-                    exit "${rc}"
-                    ;;
-            esac
-
-            if is_true "${do_attach}"; then
-                attach_to_multiplexer "${target}" || msg "Unable to attach to multiplexer. Perhaps it completed it's job and exited already?"
-            fi
-
+            execute "${CMD}" "${target}"
         done
     else
         abort "No targets specified"
