@@ -26,6 +26,7 @@ DISABLE_COLOUR=FALSE
 SUDO=FALSE
 PASSWORDLESS_SUDO=FALSE
 LOCAL=FALSE
+AUTO_ATTACH=TRUE
 CMD='all'
 
 EXIT_TIMEOUT=65
@@ -417,6 +418,8 @@ OPTIONS:
   -v, --verbose               Enable verbose output
   --local                     Do the local call only. Any remote targets will
                               be ignored.
+  --dont-attach               When running a command in the terminal multiplexer - proceed to the
+                              next host immediately without attaching to the multiplexer.
 
 EOF
     exit "${1:-0}"
@@ -577,8 +580,7 @@ execute () {
             ;;
 
         "${EXIT_RUNNING_IN_TMUX}")
-            # TODO Support disabling auto attach via commandline args
-            do_attach=TRUE
+            do_attach="${AUTO_ATTACH}"
             multiplexer='tmux'
             ;;
 
@@ -623,6 +625,10 @@ main () {
 
             --passwordless-sudo)
                 PASSWORDLESS_SUDO=TRUE
+                ;;
+
+            --dont-attach     )
+                AUTO_ATTACH=FALSE
                 ;;
 
             -l|--load)
