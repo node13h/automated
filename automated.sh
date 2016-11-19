@@ -382,7 +382,7 @@ display_automated_usage_and_exit () {
     cat <<EOF
 Usage: ${PROG} [OPTIONS] [[<[USER@]ADDRESS[:PORT]>] ...]
 
-Runs commands on localhost or one or more remote targets.
+Runs commands on local host or one or more remote targets.
 
 OPTIONS:
 
