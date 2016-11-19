@@ -512,7 +512,7 @@ execute () {
             handler=(ssh -q $(target_as_ssh_arguments "${target}") --)
         fi
 
-        handler+="$(in_proper_context bash)"
+        handler+=("$(in_proper_context bash)")
     fi
 
     # Loop until SUDO password is accepted
@@ -696,8 +696,14 @@ main () {
         execute "${CMD}"
     elif [[ "${#targets[@]}" -gt 0 ]]; then
         for target in "${targets[@]}"; do
+
+            rc=0
+
             execute "${CMD}" "${target}" || rc=$?
-            is_true "${IGNORE_FAILED}" || exit "${rc}"
+
+            if [[ "${rc}" -ne 0 ]]; then
+                is_true "${IGNORE_FAILED}" || exit "${rc}"
+            fi
         done
     else
         abort "No targets specified"
