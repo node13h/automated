@@ -35,6 +35,10 @@ EXIT_MULTIPLEXER_ALREADY_RUNNING=68
 TMUX_SOCK_PREFIX="/tmp/tmux-automated"
 EXPORT_VARS=()
 
+SUDO_UID_VARIABLE='AUTOMATED_SUDO_UID'
+OWNER_UID_SOURCE="\${${SUDO_UID_VARIABLE}:-\$(id -u)}"
+
+
 pty_helper_script () {
     cat <<"EOF"
 import os
@@ -134,7 +138,10 @@ if pid is 0:
         'bash', '-c', (
             'echo "SUDO_SUCCESS" >/dev/tty; '
             'export PTY_HELPER_SCRIPT={}; '
-            'exec {}').format(__file__, COMMAND)])
+            'export {}={}; '
+            'exec {}').format(__file__,
+                              os.environ['SUDO_UID_VARIABLE'], os.getuid(),
+                              COMMAND)])
 
 # Disable echo
 attr = termios.tcgetattr(child_pty)
@@ -286,8 +293,9 @@ packages_ensure () {
 
 # TODO services_ensure enabled|disabled
 
+
 tmux_command () {
-    tmux -S "${TMUX_SOCK_PREFIX}-$(logname)" "${@}"
+    tmux -S "${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}" "${@}"
 }
 
 tmux_present () {
@@ -312,27 +320,26 @@ run_in_multiplexer () {
         cmd tmux_command send ENTER
     fi
 
-    chown "$(logname)" "${TMUX_SOCK_PREFIX}-$(logname)"
+    chown "${AUTOMATED_OWNER_UID}" "${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}"
 
     exit "${EXIT_RUNNING_IN_MULTIPLEXER}"
 }
 
 
 attach_to_multiplexer () {
-    local local="${1:-TRUE}"
-    local target="${2:LOCAL HOST}"
+    local target="${1:-LOCAL HOST}"
 
     local handler
 
     if is_true "${LOCAL}"; then
         handler=(eval)
     else
-        handler=(ssh -q $(target_as_ssh_arguments "${target}") --)
+        handler=(ssh -t -q $(target_as_ssh_arguments "${target}") --)
     fi
 
     # TODO Support for screen
 
-    cmd "${handler[@]}" tmux -S "${TMUX_SOCK_PREFIX}-\$(logname)" attach
+    cmd "${handler[@]}" "tmux -S \"${TMUX_SOCK_PREFIX}-${OWNER_UID_SOURCE}\" attach"
 }
 
 ask_sudo_password () {
@@ -411,16 +418,19 @@ target_as_ssh_arguments () {
 }
 
 in_proper_context () {
+    local cmdline=()
+
     if is_true "${SUDO}"; then
-        echo "$(exit_codes) python <(base64 -d <<< $(pty_helper_script | gzip | base64 -w 0) | gunzip) ${@}"
-    else
-        echo "${@}"
+        cmdline+=("$(pty_helper_settings) python <(base64 -d <<< $(pty_helper_script | gzip | base64 -w 0) | gunzip)")
     fi
+
+    cmdline+=("${@}")
+
+    echo "${cmdline[@]}"
 }
 
-exit_codes () {
-    local var
-    echo "EXIT_TIMEOUT=${EXIT_TIMEOUT} EXIT_SUDO_PASSWORD_NOT_ACCEPTED=${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}"
+pty_helper_settings () {
+    echo "SUDO_UID_VARIABLE=${SUDO_UID_VARIABLE} EXIT_TIMEOUT=${EXIT_TIMEOUT} EXIT_SUDO_PASSWORD_NOT_ACCEPTED=${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}"
 }
 
 execute () {
@@ -451,10 +461,6 @@ execute () {
                 echo "${SUDO_PASSWORD}"  # This one will be consumed by the PTY helper
             fi
 
-            if is_true "${DEBUG}"; then
-                echo "DEBUG=TRUE"
-            fi
-
             if [[ "${#EXPORT_VARS[@]}" -gt 0 ]]; then
                 echo "# Vars"
                 msg_debug "Exporting variables"
@@ -463,6 +469,12 @@ execute () {
                     echo "${var_definition}"
                 done < <(env_var_definitions "${EXPORT_VARS[@]}")
             fi
+
+            if is_true "${DEBUG}"; then
+                echo "DEBUG=TRUE"
+            fi
+
+            echo "AUTOMATED_OWNER_UID=${OWNER_UID_SOURCE}"
 
             echo "# ${PROG}"
             msg_debug "Concatenating ${0}"
@@ -508,9 +520,8 @@ execute () {
             ;;
     esac
 
-    # TODO FIX attach_to_multiplexer
     if is_true "${do_attach}"; then
-        attach_to_multiplexer "${target}" || msg "Unable to attach to multiplexer. Perhaps it completed it's job and exited already?"
+        attach_to_multiplexer "${target}" || msg "Unable to attach to multiplexer on ${target}. Perhaps it completed it's job and exited already?"
     fi
 }
 
