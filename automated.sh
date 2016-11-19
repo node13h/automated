@@ -29,8 +29,11 @@ CMD='all'
 
 EXIT_TIMEOUT=65
 EXIT_SUDO_PASSWORD_NOT_ACCEPTED=66
-EXIT_RUNNING_IN_MULTIPLEXER=67
-EXIT_MULTIPLEXER_ALREADY_RUNNING=68
+EXIT_RUNNING_IN_TMUX=67
+# TODO EXIT_RUNNING_IN_SCREEN=68
+EXIT_MULTIPLEXER_ALREADY_RUNNING=69
+
+SUPPORTED_MULTIPLEXERS=(tmux)
 
 TMUX_SOCK_PREFIX="/tmp/tmux-automated"
 EXPORT_VARS=()
@@ -298,36 +301,53 @@ tmux_command () {
     tmux -S "${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}" "${@}"
 }
 
-tmux_present () {
-    which tmux 1>/dev/null 2>&1
+multiplexer_present () {
+    local multiplexer
+
+    for multiplexer in "${SUPPORTED_MULTIPLEXERS[@]}"; do
+        if which "${multiplexer}" 1>/dev/null 2>&1; then
+            echo "${multiplexer}"
+            return 0
+        fi
+    done
+
+    return 1
 }
 
 run_in_multiplexer () {
 
-    # TODO support for screen
+    local multiplexer
 
-    if ! tmux_present; then
-        abort "tmux is missing (and screen is not supported yet. Please install relevant package"
+    if ! multiplexer=$(multiplexer_present); then
+        abort "Multiplexer is not available. Please install one of the following: ${SUPPORTED_MULTIPLEXERS[@]}"
     fi
 
-    if tmux_command ls 2>/dev/null | to_debug; then
-        msg_debug "Multiplexer is already running"
-        exit "${EXIT_MULTIPLEXER_ALREADY_RUNNING}"
-    else
-        msg_debug "Starting multiplexer and sending commands"
-        cmd tmux_command new-session -d
-        cmd tmux_command -l send "${@}"
-        cmd tmux_command send ENTER
-    fi
+    case "${multiplexer}" in
+        tmux)
+            if tmux_command ls 2>/dev/null | to_debug; then
+                msg_debug "Multiplexer is already running"
+                exit "${EXIT_MULTIPLEXER_ALREADY_RUNNING}"
+            else
+                msg_debug "Starting multiplexer and sending commands"
+                cmd tmux_command new-session -d
+                cmd tmux_command -l send "${@}"
+                cmd tmux_command send ENTER
+            fi
 
-    chown "${AUTOMATED_OWNER_UID}" "${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}"
+            chown "${AUTOMATED_OWNER_UID}" "${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}"
 
-    exit "${EXIT_RUNNING_IN_MULTIPLEXER}"
+            exit "${EXIT_RUNNING_IN_TMUX}"
+            ;;
+
+        # TODO screen
+    esac
 }
 
 
+# This command is usually run on the controlling workstation, not remote
 attach_to_multiplexer () {
-    local target="${1:-LOCAL HOST}"
+    local multiplexer="${1}"
+    local target="${2:-LOCAL HOST}"
 
     local handler
 
@@ -337,9 +357,13 @@ attach_to_multiplexer () {
         handler=(ssh -t -q $(target_as_ssh_arguments "${target}") --)
     fi
 
-    # TODO Support for screen
+    case "${multiplexer}" in
+        tmux)
+            cmd "${handler[@]}" "tmux -S \"${TMUX_SOCK_PREFIX}-${OWNER_UID_SOURCE}\" attach"
+            ;;
 
-    cmd "${handler[@]}" "tmux -S \"${TMUX_SOCK_PREFIX}-${OWNER_UID_SOURCE}\" attach"
+        # TODO screen
+    esac
 }
 
 ask_sudo_password () {
@@ -436,7 +460,7 @@ execute () {
     local command="${1}"
     local target="${2:-LOCAL HOST}"
 
-    local handler args var_definition file_path rc do_attach
+    local handler args var_definition file_path rc do_attach multiplexer
 
     if is_true "${LOCAL}"; then
         handler=(eval)
@@ -508,11 +532,13 @@ execute () {
             do_attach=TRUE
             ;;
 
-        "${EXIT_RUNNING_IN_MULTIPLEXER}")
+        "${EXIT_RUNNING_IN_TMUX}")
             # TODO Support disabling auto attach via commandline args
-            msg_debug "Command is running in multiplexer. Attaching ..."
             do_attach=TRUE
+            multiplexer='tmux'
             ;;
+
+        # TODO screen
         *)
             # TODO Make exit on fist error optional (will lose exit codes)
             exit "${rc}"
@@ -520,7 +546,8 @@ execute () {
     esac
 
     if is_true "${do_attach}"; then
-        attach_to_multiplexer "${target}" || msg "Unable to attach to multiplexer on ${target}. Perhaps it completed it's job and exited already?"
+        msg_debug "Attaching to multiplexer (${multiplexer}) ..."
+        attach_to_multiplexer "${multiplexer}" "${target}" || msg "Unable to attach to multiplexer on ${target}. Perhaps it completed it's job and exited already?"
     fi
 }
 
