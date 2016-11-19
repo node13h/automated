@@ -378,7 +378,7 @@ ask_sudo_password () {
     newline
 } </dev/tty >/dev/tty
 
-display_usage_and_exit () {
+display_automated_usage_and_exit () {
     cat <<EOF
 Usage: ${PROG} [OPTIONS] [[<[USER@]ADDRESS[:PORT]>] ...]
 
@@ -561,7 +561,7 @@ main () {
     local inventory_file
     local -a targets=()
 
-    [[ "${#}" -gt 0 ]] || display_usage_and_exit 1
+    [[ "${#}" -gt 0 ]] || display_automated_usage_and_exit 1
 
     while [[ "${#}" -gt 0 ]]; do
 
@@ -574,7 +574,7 @@ main () {
             # TODO Argument to set custom tmux socket path
 
             -h|--help|help|'')
-                display_usage_and_exit
+                display_automated_usage_and_exit
                 ;;
 
             -v|--verbose)
