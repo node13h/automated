@@ -28,6 +28,7 @@ PASSWORDLESS_SUDO=FALSE
 LOCAL=FALSE
 AUTO_ATTACH=TRUE
 IGNORE_FAILED=FALSE
+DUMP_SCRIPT=FALSE
 CMD='all'
 
 EXIT_TIMEOUT=65
@@ -423,6 +424,8 @@ OPTIONS:
                               next host immediately without attaching to the multiplexer.
   --ignore-failed             If one of the targets has failed - proceed to the next one. Exit
                               codes will be lost.
+  --dump-script               Output compiled script to STDOUT. Do not run anything. Implies
+                              the local operation.
 
 EOF
     exit "${1:-0}"
@@ -500,10 +503,16 @@ execute () {
 
     local handler args var_definition file_path rc do_attach multiplexer
 
-    if is_true "${LOCAL}"; then
-        handler=(eval)
+    if is_true "${DUMP_SCRIPT}"; then
+        handler=(cat)
     else
-        handler=(ssh -q $(target_as_ssh_arguments "${target}") --)
+        if is_true "${LOCAL}"; then
+            handler=(eval)
+        else
+            handler=(ssh -q $(target_as_ssh_arguments "${target}") --)
+        fi
+
+        handler+="$(in_proper_context bash)"
     fi
 
     # Loop until SUDO password is accepted
@@ -519,7 +528,11 @@ execute () {
         {
             # sudo password has to go first!
             if is_true "${SUDO}"; then
-                echo "${sudo_password}"  # This one will be consumed by the PTY helper
+                if is_true "${DUMP_SCRIPT}"; then
+                    echo '*** SUDO PASSWORD IS HIDDEN IN SCRIPT DUMP MODE ***'
+                else
+                    echo "${sudo_password}"  # This one will be consumed by the PTY helper
+                fi
             fi
 
             if [[ "${#EXPORT_VARS[@]}" -gt 0 ]]; then
@@ -554,7 +567,7 @@ execute () {
             echo "# Entry point"
             echo "${command}"
 
-        } | cmd "${handler[@]}" "$(in_proper_context bash)" || rc=$?
+        } | cmd "${handler[@]}" || rc=$?
 
         case "${rc}" in
             "${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}")
@@ -609,7 +622,6 @@ main () {
 
         case "${1}" in
 
-            # TODO Argument to show compiled script
             # TODO --sudo-password-on-stdin
             # TODO Argument to set custom tmux socket path
 
@@ -635,6 +647,11 @@ main () {
 
             --ignore-failed)
                 IGNORE_FAILED=TRUE
+                ;;
+
+            --dump-script)
+                DUMP_SCRIPT=TRUE
+                LOCAL=TRUE
                 ;;
 
             -l|--load)
