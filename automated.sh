@@ -343,11 +343,10 @@ attach_to_multiplexer () {
 }
 
 ask_sudo_password () {
-    # TODO? Ask on tty?
-    echo -n "SUDO password (${1:-localhost}): " | to_stderr
+    echo -n "SUDO password (${1:-localhost}): "
     read -s SUDO_PASSWORD
-    newline | to_stderr
-}
+    newline
+} </dev/tty >/dev/tty
 
 display_usage_and_exit () {
     cat <<EOF
