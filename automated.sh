@@ -314,6 +314,12 @@ multiplexer_present () {
     return 1
 }
 
+multiplexer_ensure_installed () {
+    if ! multiplexer_present >/dev/null; then
+        packages_ensure installed "${SUPPORTED_MULTIPLEXERS}"  # Install first one
+    fi
+}
+
 run_in_multiplexer () {
 
     local multiplexer
