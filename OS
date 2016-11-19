@@ -1,0 +1,83 @@
+#!/bin/bash
+
+# This script allows you to update local or remote system(s)
+# like this:
+#
+#   OS update host1.example.com user@host2.example.com:22000
+#   OS update --local
+#
+# Copyright (C) 2016 Sergej Alikov <sergej.alikov@gmail.com>
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+set -eu
+set -o pipefail
+
+
+os_update () {
+
+    multiplexer_ensure_installed
+
+    case "${FACT_OS_NAME}" in
+        "Fedora")
+            run_in_multiplexer "dnf -y update; exit"
+            ;;
+        "RHEL"|"CentOS")
+            run_in_multiplexer "yum -y update; exit"
+            ;;
+        "Debian"|"Ubuntu")
+            run_in_multiplexer "apt-get -y update && apt-get -y dist-upgrade; exit"
+            ;;
+    esac
+}
+
+
+display_usage_and_exit () {
+    >&2 cat <<EOF
+Usage ${0} [OPTIONS] COMMAND ([[<[USER@]ADDRESS[:PORT]>] ...] | --local)
+
+COMMANDS:
+  update  Update the operating system on local host or one or more remote targets.
+
+OPTIONS:
+
+  -i, --inventory <FILE>  Load list of targets from the FILE
+  -v, --verbose           Enable verbose output
+  --local                 Do the local call only. Any remote targets will
+                          be ignored.
+
+EOF
+}
+
+
+if [[ -n "${BASH_SOURCE:-}" && "${0}" = "${BASH_SOURCE}" ]]; then
+    if [[ "${#}" -gt 0 ]]; then
+        case "${1}" in
+            update)
+                COMMAND='os_update'
+                ;;
+            *)
+                >&2 echo "Unsupported command!"
+                exit 1
+                ;;
+        esac
+
+        shift
+
+        automated.sh -l "${BASH_SOURCE}" -c "${COMMAND}" -s "${@}"
+    else
+        display_usage_and_exit
+    fi
+fi
