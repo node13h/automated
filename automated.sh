@@ -24,14 +24,16 @@ PROG=$(basename "${BASH_SOURCE:-}")
 DEBUG=FALSE
 DISABLE_COLOUR=FALSE
 SUDO=FALSE
+PASSWORDLESS_SUDO=FALSE
 LOCAL=FALSE
 CMD='all'
 
 EXIT_TIMEOUT=65
 EXIT_SUDO_PASSWORD_NOT_ACCEPTED=66
-EXIT_RUNNING_IN_TMUX=67
-# TODO EXIT_RUNNING_IN_SCREEN=68
-EXIT_MULTIPLEXER_ALREADY_RUNNING=69
+EXIT_SUDO_PASSWORD_REQUIRED=67
+EXIT_RUNNING_IN_TMUX=68
+# TODO EXIT_RUNNING_IN_SCREEN=69
+EXIT_MULTIPLEXER_ALREADY_RUNNING=70
 
 SUPPORTED_MULTIPLEXERS=(tmux)
 
@@ -50,9 +52,13 @@ import pty
 import select
 import termios
 import time
+import argparse
 
-# TODO Do proper handling
-COMMAND = ' '.join(sys.argv[1:])
+parser = argparse.ArgumentParser(description='SUDO PTY helper')
+parser.add_argument('--passwordless-sudo', action='store_true', default=False)
+parser.add_argument('command')
+
+args = parser.parse_args()
 
 DEFAULT_TIMEOUT = 60
 DEFAULT_READ_BUFFER_SIZE = 1024
@@ -63,6 +69,7 @@ STDERR = sys.stderr.fileno()
 
 EXIT_TIMEOUT = int(os.environ['EXIT_TIMEOUT'])
 EXIT_SUDO_PASSWORD_NOT_ACCEPTED = int(os.environ['EXIT_SUDO_PASSWORD_NOT_ACCEPTED'])
+EXIT_SUDO_PASSWORD_REQUIRED = int(os.environ['EXIT_SUDO_PASSWORD_REQUIRED'])
 
 class Timeout(Exception):
     pass
@@ -144,7 +151,7 @@ if pid is 0:
             'export {}={}; '
             'exec {}').format(__file__,
                               os.environ['SUDO_UID_VARIABLE'], os.getuid(),
-                              COMMAND)])
+                              args.command)])
 
 # Disable echo
 attr = termios.tcgetattr(child_pty)
@@ -154,6 +161,10 @@ termios.tcsetattr(child_pty, termios.TCSANOW, attr)
 try:
     s = one_of(child_pty, ['SUDO_PASSWORD_PROMPT:', 'SUDO_SUCCESS'])
     if s == 'SUDO_PASSWORD_PROMPT:':
+
+        if args.passwordless_sudo:
+            sys.exit(EXIT_SUDO_PASSWORD_REQUIRED)
+
         os.write(child_pty, sudo_pass)
 
         s = one_of(child_pty, ['SUDO_PASSWORD_PROMPT:', 'SUDO_SUCCESS'])
@@ -373,10 +384,17 @@ attach_to_multiplexer () {
 }
 
 ask_sudo_password () {
-    echo -n "SUDO password (${1:-localhost}): "
-    read -s SUDO_PASSWORD
-    newline
-} </dev/tty >/dev/tty
+    local sudo_password
+    {
+
+        echo -n "SUDO password (${1:-localhost}): "
+        read -s sudo_password
+        newline
+
+    } </dev/tty >/dev/tty
+
+    echo "${sudo_password}"
+}
 
 display_automated_usage_and_exit () {
     cat <<EOF
@@ -386,7 +404,8 @@ Runs commands on local host or one or more remote targets.
 
 OPTIONS:
 
-  -s, --sudo                  Use sudo to do the calls
+  -s, --sudo                  Use SUDO to do the calls
+  --passwordless-sudo         Don't ask for SUDO password. Will ask anyway if target insists.
   -c, --call <COMMAND>        Command to call. Default is "${CMD}"
   -i, --inventory <FILE>      Load list of targets from the FILE
   -e, --export <VAR>          Make VAR from local environment available on the remote
@@ -447,24 +466,31 @@ target_as_ssh_arguments () {
 }
 
 in_proper_context () {
+    local command="${1}"
     local cmdline=()
 
     if is_true "${SUDO}"; then
         cmdline+=("$(pty_helper_settings) python <(base64 -d <<< $(pty_helper_script | gzip | base64 -w 0) | gunzip)")
+
+        if is_true "${PASSWORDLESS_SUDO}"; then
+            cmdline+=("--passwordless-sudo")
+        fi
     fi
 
-    cmdline+=("${@}")
+    cmdline+=("${command}")
 
     echo "${cmdline[@]}"
 }
 
 pty_helper_settings () {
-    echo "SUDO_UID_VARIABLE=${SUDO_UID_VARIABLE} EXIT_TIMEOUT=${EXIT_TIMEOUT} EXIT_SUDO_PASSWORD_NOT_ACCEPTED=${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}"
+    echo "SUDO_UID_VARIABLE=\"${SUDO_UID_VARIABLE}\" EXIT_TIMEOUT=\"${EXIT_TIMEOUT}\" EXIT_SUDO_PASSWORD_NOT_ACCEPTED=\"${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}\" EXIT_SUDO_PASSWORD_REQUIRED=\"${EXIT_SUDO_PASSWORD_REQUIRED}\""
 }
 
 execute () {
     local command="${1}"
     local target="${2:-LOCAL HOST}"
+
+    local sudo_password=''
 
     local handler args var_definition file_path rc do_attach multiplexer
 
@@ -479,15 +505,15 @@ execute () {
 
         rc=0
 
-        if is_true "${SUDO}"; then
-            ask_sudo_password "${target}"
+        if ! is_true "${PASSWORDLESS_SUDO}" && is_true "${SUDO}"; then
+            sudo_password=$(ask_sudo_password "${target}")
         fi
 
         msg_debug "Executing on ${target}"
         {
             # sudo password has to go first!
             if is_true "${SUDO}"; then
-                echo "${SUDO_PASSWORD}"  # This one will be consumed by the PTY helper
+                echo "${sudo_password}"  # This one will be consumed by the PTY helper
             fi
 
             if [[ "${#EXPORT_VARS[@]}" -gt 0 ]]; then
@@ -524,7 +550,19 @@ execute () {
 
         } | cmd "${handler[@]}" "$(in_proper_context bash)" || rc=$?
 
-        [[ "${rc}" -eq "${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}" ]] || break
+        case "${rc}" in
+            "${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}")
+                msg_debug 'SUDO password was rejected. Looping over'
+                ;;
+
+            "${EXIT_SUDO_PASSWORD_REQUIRED}")
+                msg_debug "${target} requested the password for SUDO, disabling passwordless SUDO mode and looping over."
+                PASSWORDLESS_SUDO=FALSE
+                ;;
+            *)
+                break
+                ;;
+        esac
 
     done
 
@@ -568,9 +606,7 @@ main () {
         case "${1}" in
 
             # TODO Argument to show compiled script
-            # TODO --sudo-askpass optional argument (sudo may be passwordless)
             # TODO --sudo-password-on-stdin
-            # TODO --become should imply --sudo and --sudo-askpass
             # TODO Argument to set custom tmux socket path
 
             -h|--help|help|'')
@@ -583,6 +619,10 @@ main () {
 
             -s|--sudo)
                 SUDO=TRUE
+                ;;
+
+            --passwordless-sudo)
+                PASSWORDLESS_SUDO=TRUE
                 ;;
 
             -l|--load)
