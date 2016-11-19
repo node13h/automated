@@ -27,6 +27,7 @@ SUDO=FALSE
 PASSWORDLESS_SUDO=FALSE
 LOCAL=FALSE
 AUTO_ATTACH=TRUE
+IGNORE_FAILED=FALSE
 CMD='all'
 
 EXIT_TIMEOUT=65
@@ -420,6 +421,8 @@ OPTIONS:
                               be ignored.
   --dont-attach               When running a command in the terminal multiplexer - proceed to the
                               next host immediately without attaching to the multiplexer.
+  --ignore-failed             If one of the targets has failed - proceed to the next one. Exit
+                              codes will be lost.
 
 EOF
     exit "${1:-0}"
@@ -586,8 +589,7 @@ execute () {
 
         # TODO screen
         *)
-            # TODO Make exit on fist error optional (will lose exit codes)
-            exit "${rc}"
+            return "${rc}"
             ;;
     esac
 
@@ -598,7 +600,7 @@ execute () {
 }
 
 main () {
-    local inventory_file
+    local inventory_file rc
     local -a targets=()
 
     [[ "${#}" -gt 0 ]] || display_automated_usage_and_exit 1
@@ -627,8 +629,12 @@ main () {
                 PASSWORDLESS_SUDO=TRUE
                 ;;
 
-            --dont-attach     )
+            --dont-attach)
                 AUTO_ATTACH=FALSE
+                ;;
+
+            --ignore-failed)
+                IGNORE_FAILED=TRUE
                 ;;
 
             -l|--load)
@@ -673,7 +679,8 @@ main () {
         execute "${CMD}"
     elif [[ "${#targets[@]}" -gt 0 ]]; then
         for target in "${targets[@]}"; do
-            execute "${CMD}" "${target}"
+            execute "${CMD}" "${target}" || rc=$?
+            is_true "${IGNORE_FAILED}" || exit "${rc}"
         done
     else
         abort "No targets specified"
