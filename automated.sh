@@ -19,7 +19,7 @@
 set -eu
 set -o pipefail
 
-PROG=$(basename "${0}")
+PROG=$(basename "${BASH_SOURCE:-}")
 
 DEBUG=FALSE
 DISABLE_COLOUR=FALSE
@@ -602,6 +602,6 @@ main () {
 }
 
 
-if [[ "${PROG}" = "automated.sh" ]]; then
+if [[ -n "${BASH_SOURCE:-}" && "${0}" = "${BASH_SOURCE}" ]]; then
     main "${@}"
 fi
