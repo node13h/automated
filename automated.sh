@@ -25,6 +25,7 @@ DEBUG=FALSE
 DISABLE_COLOUR=FALSE
 SUDO=FALSE
 PASSWORDLESS_SUDO=FALSE
+SUDO_PASSWORD_ON_STDIN=FALSE
 LOCAL=FALSE
 AUTO_ATTACH=TRUE
 IGNORE_FAILED=FALSE
@@ -432,13 +433,18 @@ attach_to_multiplexer () {
 
 ask_sudo_password () {
     local sudo_password
-    {
 
-        echo -n "SUDO password (${1:-localhost}): "
-        read -s sudo_password
-        newline
+    if is_true "${SUDO_PASSWORD_ON_STDIN}"; then
+        read sudo_password
+    else
+        {
 
-    } </dev/tty >/dev/tty
+            echo -n "SUDO password (${1:-localhost}): "
+            read -s sudo_password
+            newline
+
+        } </dev/tty >/dev/tty
+    fi
 
     echo "${sudo_password}"
 }
@@ -453,6 +459,7 @@ OPTIONS:
 
   -s, --sudo                  Use SUDO to do the calls
   --passwordless-sudo         Don't ask for SUDO password. Will ask anyway if target insists.
+  --sudo-password-on-stdin    Read SUDO password from STDIN
   -c, --call <COMMAND>        Command to call. Default is "${CMD}"
   -i, --inventory <FILE>      Load list of targets from the FILE
   -e, --export <VAR>          Make VAR from local environment available on the remote
@@ -615,7 +622,12 @@ execute () {
 
         case "${rc}" in
             "${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}")
-                msg_debug 'SUDO password was rejected. Looping over'
+                if is_true "${SUDO_PASSWORD_ON_STDIN}"; then
+                    msg_debug "SUDO password was provided on STDIN, can't prompt, giving up"
+                    break
+                else
+                    msg_debug 'SUDO password was rejected. Looping over'
+                fi
                 ;;
 
             "${EXIT_SUDO_PASSWORD_REQUIRED}")
@@ -679,6 +691,10 @@ main () {
 
             -s|--sudo)
                 SUDO=TRUE
+                ;;
+
+            --sudo-password-on-stdin)
+                SUDO_PASSWORD_ON_STDIN=TRUE
                 ;;
 
             --passwordless-sudo)
