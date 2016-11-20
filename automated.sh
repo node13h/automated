@@ -242,6 +242,10 @@ cmd () {
     "${@}"
 }
 
+cmd_is_available () {
+    which "${1}" >/dev/null 2>&1
+}
+
 readable_file () {
     [[ -f "${1}" && -r "${1}" ]]
 }
@@ -252,6 +256,14 @@ readable_directory () {
 
 get_the_facts () {
     local pkg ver
+
+    FACT_SYSTEMD=FALSE
+
+    if cmd_is_available systemctl; then
+        if $(systemctl --quiet is-active -- '-.mount'); then
+            FACT_SYSTEMD=TRUE
+        fi
+    fi
 
     if [[ -f /etc/redhat-release ]]; then
         FACT_OS_FAMILY='RedHat'
@@ -308,8 +320,40 @@ packages_ensure () {
     esac
 }
 
-# TODO services_ensure enabled|disabled
 
+service_ensure () {
+    local service="${1}"
+    local command="${2}"
+
+    if is_true "${FACT_SYSTEMD}"; then
+        case "${command}" in
+            enabled)
+                systemctl enable "${service}"
+                ;;
+            disabled)
+                systemctl disable "${service}"
+                ;;
+        esac
+    else
+        case "${FACT_OS_FAMILY}-${command}" in
+            'RedHat-enabled')
+                chkconfig "${service}" on
+                ;;
+            'RedHat-disabled')
+                chkconfig "${service}" off
+                ;;
+            'Debian-enabled')
+                update-rc.d "${service}" enable
+                ;;
+            'Debian-disabled')
+                update-rc.d "${service}" disable
+                ;;
+            *)
+                abort "Command ${command} is unsupported on ${FACT_OS_FAMILY}"
+                ;;
+        esac
+    fi
+}
 
 tmux_command () {
     tmux -S "${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}" "${@}"
@@ -319,7 +363,7 @@ multiplexer_present () {
     local multiplexer
 
     for multiplexer in "${SUPPORTED_MULTIPLEXERS[@]}"; do
-        if which "${multiplexer}" 1>/dev/null 2>&1; then
+        if cmd_is_available "${multiplexer}"; then
             echo "${multiplexer}"
             return 0
         fi
