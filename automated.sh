@@ -678,7 +678,6 @@ main () {
 
         case "${1}" in
 
-            # TODO --sudo-password-on-stdin
             # TODO Argument to set custom tmux socket path
 
             -h|--help|help|'')
