@@ -24,7 +24,7 @@ PROG=$(basename "${BASH_SOURCE:-}")
 DEBUG=FALSE
 DISABLE_COLOUR=FALSE
 SUDO=FALSE
-PASSWORDLESS_SUDO=FALSE
+SUDO_PASSWORDLESS=FALSE
 SUDO_PASSWORD_ON_STDIN=FALSE
 LOCAL=FALSE
 AUTO_ATTACH=TRUE
@@ -59,7 +59,7 @@ import time
 import argparse
 
 parser = argparse.ArgumentParser(description='SUDO PTY helper')
-parser.add_argument('--passwordless-sudo', action='store_true', default=False)
+parser.add_argument('--sudo-passwordless', action='store_true', default=False)
 parser.add_argument('command')
 
 args = parser.parse_args()
@@ -166,7 +166,7 @@ try:
     s = one_of(child_pty, ['SUDO_PASSWORD_PROMPT:', 'SUDO_SUCCESS'])
     if s == 'SUDO_PASSWORD_PROMPT:':
 
-        if args.passwordless_sudo:
+        if args.sudo_passwordless:
             sys.exit(EXIT_SUDO_PASSWORD_REQUIRED)
 
         os.write(child_pty, sudo_pass)
@@ -458,7 +458,7 @@ Runs commands on local host or one or more remote targets.
 OPTIONS:
 
   -s, --sudo                  Use SUDO to do the calls
-  --passwordless-sudo         Don't ask for SUDO password. Will ask anyway if target insists.
+  --sudo-passwordless         Don't ask for SUDO password. Will ask anyway if target insists.
   --sudo-password-on-stdin    Read SUDO password from STDIN
   -c, --call <COMMAND>        Command to call. Default is "${CMD}"
   -i, --inventory <FILE>      Load list of targets from the FILE
@@ -532,8 +532,8 @@ in_proper_context () {
     if is_true "${SUDO}"; then
         cmdline+=("$(pty_helper_settings) python <(base64 -d <<< $(pty_helper_script | gzip | base64 -w 0) | gunzip)")
 
-        if is_true "${PASSWORDLESS_SUDO}"; then
-            cmdline+=("--passwordless-sudo")
+        if is_true "${SUDO_PASSWORDLESS}"; then
+            cmdline+=("--sudo-passwordless")
         fi
     fi
 
@@ -571,7 +571,7 @@ execute () {
 
         rc=0
 
-        if ! is_true "${PASSWORDLESS_SUDO}" && is_true "${SUDO}"; then
+        if ! is_true "${SUDO_PASSWORDLESS}" && is_true "${SUDO}"; then
             sudo_password=$(ask_sudo_password "${target}")
         fi
 
@@ -632,7 +632,7 @@ execute () {
 
             "${EXIT_SUDO_PASSWORD_REQUIRED}")
                 msg_debug "${target} requested the password for SUDO, disabling passwordless SUDO mode and looping over."
-                PASSWORDLESS_SUDO=FALSE
+                SUDO_PASSWORDLESS=FALSE
                 ;;
             *)
                 break
@@ -697,8 +697,8 @@ main () {
                 SUDO_PASSWORD_ON_STDIN=TRUE
                 ;;
 
-            --passwordless-sudo)
-                PASSWORDLESS_SUDO=TRUE
+            --sudo-passwordless)
+                SUDO_PASSWORDLESS=TRUE
                 ;;
 
             --dont-attach)
