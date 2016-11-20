@@ -477,6 +477,8 @@ OPTIONS:
                               codes will be lost.
   --dump-script               Output compiled script to STDOUT. Do not run anything. Implies
                               the local operation.
+  --tmux-sock-prefix <PATH>   Use custom PATH prefix for tmux socket on the target.
+                              Default: ${TMUX_SOCK_PREFIX}
 
 EOF
     exit "${1:-0}"
@@ -599,8 +601,6 @@ execute () {
                 echo "DEBUG=TRUE"
             fi
 
-            echo "AUTOMATED_OWNER_UID=${OWNER_UID_SOURCE}"
-
             echo "# ${PROG}"
             msg_debug "Concatenating ${0}"
             cat "${0}"
@@ -611,6 +611,9 @@ execute () {
                 cat "${file_path}"
                 newline
             done < <(loadable_files "${LOAD_PATH:-}")
+
+            echo "AUTOMATED_OWNER_UID=${OWNER_UID_SOURCE}"
+            echo "TMUX_SOCK_PREFIX=${TMUX_SOCK_PREFIX}"
 
             echo "# Facts"
             echo "get_the_facts"
@@ -678,8 +681,6 @@ main () {
 
         case "${1}" in
 
-            # TODO Argument to set custom tmux socket path
-
             -h|--help|help|'')
                 display_automated_usage_and_exit
                 ;;
@@ -711,6 +712,11 @@ main () {
             --dump-script)
                 DUMP_SCRIPT=TRUE
                 LOCAL=TRUE
+                ;;
+
+            --tmux-sock-prefix)
+                TMUX_SOCK_PREFIX="${2}"
+                shift
                 ;;
 
             -l|--load)
