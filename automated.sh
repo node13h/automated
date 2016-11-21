@@ -529,12 +529,13 @@ target_as_ssh_arguments () {
 
 in_proper_context () {
     local command="${1}"
+    local force_sudo_password="${2:-FALSE}"
     local cmdline=()
 
     if is_true "${SUDO}"; then
         cmdline+=("$(pty_helper_settings) python <(base64 -d <<< $(pty_helper_script | gzip | base64 -w 0) | gunzip)")
 
-        if is_true "${SUDO_PASSWORDLESS}"; then
+        if ! is_true "${force_sudo_password}" && is_true "${SUDO_PASSWORDLESS}"; then
             cmdline+=("--sudo-passwordless")
         fi
     fi
@@ -552,29 +553,34 @@ execute () {
     local command="${1}"
     local target="${2:-LOCAL HOST}"
 
-    local sudo_password=''
+    local sudo_password
+    local force_sudo_password=FALSE
 
     local handler args var_definition file_path rc do_attach multiplexer
-
-    if is_true "${DUMP_SCRIPT}"; then
-        handler=(cat)
-    else
-        if is_true "${LOCAL}"; then
-            handler=(eval)
-        else
-            handler=(ssh -q $(target_as_ssh_arguments "${target}") --)
-        fi
-
-        handler+=("$(in_proper_context bash)")
-    fi
 
     # Loop until SUDO password is accepted
     while true; do
 
+        if is_true "${DUMP_SCRIPT}"; then
+            handler=(cat)
+        else
+            if is_true "${LOCAL}"; then
+                handler=(eval)
+            else
+                handler=(ssh -q $(target_as_ssh_arguments "${target}") --)
+            fi
+
+            handler+=("$(in_proper_context bash "${force_sudo_password}")")
+        fi
+
+        sudo_password=''
+
         rc=0
 
-        if ! is_true "${SUDO_PASSWORDLESS}" && is_true "${SUDO}"; then
-            sudo_password=$(ask_sudo_password "${target}")
+        if is_true "${SUDO}"; then
+            if is_true "${force_sudo_password}" || ! is_true "${SUDO_PASSWORDLESS}"; then
+                sudo_password=$(ask_sudo_password "${target}")
+            fi
         fi
 
         msg_debug "Executing on ${target}"
@@ -626,7 +632,7 @@ execute () {
         case "${rc}" in
             "${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}")
                 if is_true "${SUDO_PASSWORD_ON_STDIN}"; then
-                    msg_debug "SUDO password was provided on STDIN, can't prompt, giving up"
+                    msg_debug "SUDO password was provided on STDIN, but rejected by the target. Can't prompt, giving up"
                     break
                 else
                     msg_debug 'SUDO password was rejected. Looping over'
@@ -634,8 +640,8 @@ execute () {
                 ;;
 
             "${EXIT_SUDO_PASSWORD_REQUIRED}")
-                msg_debug "${target} requested the password for SUDO, disabling passwordless SUDO mode and looping over."
-                SUDO_PASSWORDLESS=FALSE
+                msg_debug "${target} requested the password for SUDO, disabling passwordless SUDO mode for this target and looping over."
+                force_sudo_password=TRUE
                 ;;
             *)
                 break
