@@ -608,8 +608,8 @@ execute () {
             fi
 
             echo "# ${PROG}"
-            msg_debug "Concatenating ${0}"
-            cat "${0}"
+            msg_debug "Concatenating ${BASH_SOURCE}"
+            cat "${BASH_SOURCE}"
 
             while read -r file_path; do
                 msg_debug "Concatenating ${file_path}"
