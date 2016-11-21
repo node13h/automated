@@ -603,10 +603,6 @@ execute () {
                 done < <(env_var_definitions "${EXPORT_VARS[@]}")
             fi
 
-            if is_true "${DEBUG}"; then
-                echo "DEBUG=TRUE"
-            fi
-
             echo "# ${PROG}"
             msg_debug "Concatenating ${BASH_SOURCE}"
             cat "${BASH_SOURCE}"
@@ -618,6 +614,9 @@ execute () {
                 newline
             done < <(loadable_files "${LOAD_PATH:-}")
 
+            if is_true "${DEBUG}"; then
+                echo "DEBUG=TRUE"
+            fi
             echo "AUTOMATED_OWNER_UID=${OWNER_UID_SOURCE}"
             echo "TMUX_SOCK_PREFIX=${TMUX_SOCK_PREFIX}"
 
