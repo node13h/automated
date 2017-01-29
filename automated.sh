@@ -19,6 +19,8 @@
 set -eu
 set -o pipefail
 
+# TODO Throw error on unsupported systems (CentOS5, perhaps Ubuntu 10.04)
+
 PROG=$(basename "${BASH_SOURCE:-}")
 
 DEBUG=FALSE
@@ -197,14 +199,21 @@ msg () {
     echo "${*}" | to_stderr
 }
 
+colorize () {
+    local colour="${1}"
+    shift
+
+    is_true "${DISABLE_COLOUR}" || echo -ne "\\e[${colour}m"
+    "${@}"
+    is_true "${DISABLE_COLOUR}" || echo -ne '\e[39m'
+}
+
 to_debug () {
     if is_true "${DEBUG}"; then
 
         {
             [[ -z "${1:-}" ]] || echo "BEGIN ${1}"
-            is_true "${DISABLE_COLOUR}" || echo -ne '\e[33m'
-            cat | tr -cd '\11\12\15\40-\176'
-            is_true "${DISABLE_COLOUR}" || echo -ne '\e[39m'
+            colorize 33 tr -cd '\11\12\15\40-\176'
             [[ -z "${1:-}" ]] || echo "END ${1}"
 
         } | to_stderr
@@ -239,7 +248,8 @@ quote () {
 }
 
 cmd () {
-    msg_debug $(quote "${@}")
+    # to_stderr or to_debug may swallow STDIN intended for the command - hence the simple printf
+    colorize 32 printf 'CMD %s\n' "$(quote "${@}")" >&2
     "${@}"
 }
 
