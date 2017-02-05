@@ -45,6 +45,7 @@ SUPPORTED_MULTIPLEXERS=(tmux)
 
 TMUX_SOCK_PREFIX="/tmp/tmux-automated"
 EXPORT_VARS=()
+LOAD_PATHS=()
 
 SUDO_UID_VARIABLE='AUTOMATED_SUDO_UID'
 OWNER_UID_SOURCE="\${${SUDO_UID_VARIABLE}:-\$(id -u)}"
@@ -476,7 +477,7 @@ OPTIONS:
                               side. May be specified multiple times
   -l, --load <PATH>           Load file at specified PATH before calling
                               the command; in case PATH is a directory -
-                              load *.sh from it
+                              load *.sh from it. Can be specified multiple times.
   -h, --help                  Display help text and exit
   -v, --verbose               Enable verbose output
   --local                     Do the local call only. Any remote targets will
@@ -495,19 +496,21 @@ EOF
 }
 
 loadable_files () {
-    local file_path
+    local file_path load_path
 
-    [[ -n "${1:-}" ]] || return 0
+    [[ "${#}" -gt 0 ]] || return 0
 
-    if readable_file "${1}"; then
-        echo "${1}"
-    elif readable_directory "${1}"; then
-        for file_path in "${1%/}/"*.sh; do
-            if readable_file "${file_path}"; then
-                echo "${file_path}"
-            fi
-        done
-    fi
+    for load_path in "${@}"; do
+        if readable_file "${load_path}"; then
+            echo "${load_path}"
+        elif readable_directory "${load_path}"; then
+            for file_path in "${load_path%/}/"*.sh; do
+                if readable_file "${file_path}"; then
+                    echo "${file_path}"
+                fi
+            done
+        fi
+    done
 }
 
 env_var_definitions () {
@@ -617,12 +620,14 @@ execute () {
             msg_debug "Concatenating ${BASH_SOURCE}"
             cat "${BASH_SOURCE}"
 
-            while read -r file_path; do
-                msg_debug "Concatenating ${file_path}"
-                echo "# $(basename ${file_path})"
-                cat "${file_path}"
-                newline
-            done < <(loadable_files "${LOAD_PATH:-}")
+            if [[ "${#LOAD_PATHS[@]}" -gt 0 ]]; then
+                while read -r file_path; do
+                    msg_debug "Concatenating ${file_path}"
+                    echo "# $(basename ${file_path})"
+                    cat "${file_path}"
+                    newline
+                done < <(loadable_files "${LOAD_PATHS[@]}")
+            fi
 
             if is_true "${DEBUG}"; then
                 echo "DEBUG=TRUE"
@@ -735,7 +740,7 @@ main () {
                 ;;
 
             -l|--load)
-                LOAD_PATH="${2}"
+                LOAD_PATHS+=("${2}")
                 shift
                 ;;
 
