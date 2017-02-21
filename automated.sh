@@ -45,6 +45,7 @@ SUPPORTED_MULTIPLEXERS=(tmux)
 
 TMUX_SOCK_PREFIX="/tmp/tmux-automated"
 EXPORT_VARS=()
+EXPORT_FUNCTIONS=()
 LOAD_PATHS=()
 
 SUDO_UID_VARIABLE='AUTOMATED_SUDO_UID'
@@ -473,8 +474,10 @@ OPTIONS:
   --sudo-password-on-stdin    Read SUDO password from STDIN
   -c, --call <COMMAND>        Command to call. Default is "${CMD}"
   -i, --inventory <FILE>      Load list of targets from the FILE
-  -e, --export <VAR>          Make VAR from local environment available on the remote
-                              side. May be specified multiple times
+  -e, --export <NAME>         Make NAME from local environment available on the remote
+                              side. NAME can be either variable or function name.
+                              Functions have to be exported with the 'export -f NAME'
+                              first (bash-specific). May be specified multiple times
   -l, --load <PATH>           Load file at specified PATH before calling
                               the command; in case PATH is a directory -
                               load *.sh from it. Can be specified multiple times.
@@ -569,7 +572,7 @@ execute () {
     local sudo_password
     local force_sudo_password=FALSE
 
-    local handler args var_definition file_path rc do_attach multiplexer
+    local handler args var_definition file_path rc do_attach multiplexer fn
 
     # Loop until SUDO password is accepted
     while true; do
@@ -614,6 +617,15 @@ execute () {
                     msg_debug "${var_definition}"
                     echo "${var_definition}"
                 done < <(env_var_definitions "${EXPORT_VARS[@]}")
+            fi
+
+            if [[ "${#EXPORT_FUNCTIONS[@]}" -gt 0 ]]; then
+                echo "# Functions"
+                msg_debug "Exporting functions"
+
+                for fn in "${EXPORT_FUNCTIONS[@]}"; do
+                    declare -f "${fn}"
+                done
             fi
 
             echo "# ${PROG}"
@@ -750,7 +762,13 @@ main () {
                 ;;
 
             -e|--export)
-                EXPORT_VARS+=("${2}")
+                # NAME can be both function and variable at the same time
+                if [[ "$(type -t "${2}")" = 'function' ]]; then
+                    EXPORT_FUNCTIONS+=("${2}")
+                fi
+                if [[ "${!2+x}" = 'x' ]]; then
+                    EXPORT_VARS+=("${2}")
+                fi
                 shift
                 ;;
 
