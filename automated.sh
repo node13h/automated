@@ -251,7 +251,9 @@ quote () {
 
 cmd () {
     # to_stderr or to_debug may swallow STDIN intended for the command - hence the simple printf
-    colorize 32 printf 'CMD %s\n' "$(quote "${@}")" >&2
+    if is_true "${DEBUG}"; then
+        colorize 32 printf 'CMD %s\n' "$(quote "${@}")" >&2
+    fi
     "${@}"
 }
 
