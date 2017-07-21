@@ -275,11 +275,12 @@ get_the_facts () {
     FACT_SYSTEMD=FALSE
 
     if cmd_is_available systemctl; then
-        if $(systemctl --quiet is-active -- '-.mount'); then
+        if systemctl --quiet is-active -- '-.mount'; then
             FACT_SYSTEMD=TRUE
         fi
     fi
 
+    # shellcheck disable=SC1091,SC2034
     if [[ -f /etc/redhat-release ]]; then
         FACT_OS_FAMILY='RedHat'
         for pkg in 'centos-release' 'redhat-release' 'fedora-release'; do
@@ -298,15 +299,15 @@ get_the_facts () {
                 esac
             fi
         done
-
     elif [[ -f /etc/debian_version ]]; then
         FACT_OS_FAMILY='Debian'
-        while read var_definition; do
+        while read -r var_definition; do
             declare -g "${var_definition}"
         done < <(source /etc/os-release
                  echo "FACT_OS_NAME=${NAME}"
                  echo "FACT_OS_VERSION=${VERSION_ID}"
                  echo "FACT_OS_RELEASE=${VERSION}")
+
     else
         abort "Unsupported operating system"
     fi
@@ -389,7 +390,7 @@ multiplexer_present () {
 
 multiplexer_ensure_installed () {
     if ! multiplexer_present >/dev/null; then
-        packages_ensure installed "${SUPPORTED_MULTIPLEXERS}"  # Install first one
+        packages_ensure installed "${SUPPORTED_MULTIPLEXERS[0]}"  # Install first one
     fi
 }
 
@@ -398,7 +399,7 @@ run_in_multiplexer () {
     local multiplexer
 
     if ! multiplexer=$(multiplexer_present); then
-        abort "Multiplexer is not available. Please install one of the following: ${SUPPORTED_MULTIPLEXERS[@]}"
+        abort "Multiplexer is not available. Please install one of the following: ${SUPPORTED_MULTIPLEXERS[*]}"
     fi
 
     case "${multiplexer}" in
@@ -449,12 +450,12 @@ ask_sudo_password () {
     local sudo_password
 
     if is_true "${SUDO_PASSWORD_ON_STDIN}"; then
-        read sudo_password
+        read -r sudo_password
     else
         {
 
             echo -n "SUDO password (${1:-localhost}): "
-            read -s sudo_password
+            read -r -s sudo_password
             newline
 
         } </dev/tty >/dev/tty
@@ -574,7 +575,7 @@ execute () {
     local sudo_password
     local force_sudo_password=FALSE
 
-    local handler args var_definition file_path rc do_attach multiplexer fn
+    local handler var_definition file_path rc do_attach multiplexer fn
 
     # Loop until SUDO password is accepted
     while true; do
@@ -631,13 +632,13 @@ execute () {
             fi
 
             echo "# ${PROG}"
-            msg_debug "Concatenating ${BASH_SOURCE}"
-            cat "${BASH_SOURCE}"
+            msg_debug "Concatenating ${BASH_SOURCE[0]}"
+            cat "${BASH_SOURCE[0]}"
 
             if [[ "${#LOAD_PATHS[@]}" -gt 0 ]]; then
                 while read -r file_path; do
                     msg_debug "Concatenating ${file_path}"
-                    echo "# $(basename ${file_path})"
+                    echo "# $(basename "${file_path}")"
                     cat "${file_path}"
                     newline
                 done < <(loadable_files "${LOAD_PATHS[@]}")
@@ -816,6 +817,6 @@ main () {
 }
 
 
-if [[ -n "${BASH_SOURCE:-}" && "${0}" = "${BASH_SOURCE}" ]]; then
+if [[ -n "${BASH_SOURCE[0]:-}" && "${0}" = "${BASH_SOURCE[0]}" ]]; then
     main "${@}"
 fi
