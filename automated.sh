@@ -47,6 +47,7 @@ TMUX_SOCK_PREFIX="/tmp/tmux-automated"
 EXPORT_VARS=()
 EXPORT_FUNCTIONS=()
 LOAD_PATHS=()
+COPY_PAIRS=()
 
 SUDO_UID_VARIABLE='AUTOMATED_SUDO_UID'
 OWNER_UID_SOURCE="\${${SUDO_UID_VARIABLE}:-\$(id -u)}"
@@ -484,6 +485,9 @@ OPTIONS:
   -l, --load <PATH>           Load file at specified PATH before calling
                               the command; in case PATH is a directory -
                               load *.sh from it. Can be specified multiple times.
+  --cp LOCAL-SRC-FILE REMOTE-DST-FILE
+                              Copy local file to the target(s). Can be specified multiple
+                              times.
   -h, --help                  Display help text and exit
   -v, --verbose               Enable verbose output
   --local                     Do the local call only. Any remote targets will
@@ -568,6 +572,28 @@ pty_helper_settings () {
     echo "SUDO_UID_VARIABLE=\"${SUDO_UID_VARIABLE}\" EXIT_TIMEOUT=\"${EXIT_TIMEOUT}\" EXIT_SUDO_PASSWORD_NOT_ACCEPTED=\"${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}\" EXIT_SUDO_PASSWORD_REQUIRED=\"${EXIT_SUDO_PASSWORD_REQUIRED}\""
 }
 
+files_as_code() {
+    local src dst mode boundary
+
+    # shellcheck disable=SC2162
+    while read src dst; do
+        [[ -f "${src}" ]] || abort "${src} is not a file. Only files are supported"
+
+        mode=$(stat -c "%#03a" "${src}")
+        # Not copying owner information intentionally
+
+        boundary=$(md5sum <<< "${dst}" | cut -f 1 -d ' ')
+
+        cat <<EOF
+touch $(quote "${dst}")
+chmod ${mode} $(quote "${dst}")
+base64 -d <<"${boundary}" | gzip -d >$(quote "${dst}")
+$(gzip -c "${src}" | base64)
+${boundary}
+EOF
+    done
+}
+
 execute () {
     local command="${1}"
     local target="${2:-LOCAL HOST}"
@@ -642,6 +668,10 @@ execute () {
                     cat "${file_path}"
                     newline
                 done < <(loadable_files "${LOAD_PATHS[@]}")
+            fi
+
+            if [[ "${#COPY_PAIRS[@]}" -gt 0 ]]; then
+                files_as_code < <(printf '%s\n' "${COPY_PAIRS[@]}")
             fi
 
             if is_true "${DEBUG}"; then
@@ -752,6 +782,11 @@ main () {
             --tmux-sock-prefix)
                 TMUX_SOCK_PREFIX="${2}"
                 shift
+                ;;
+
+            --cp)
+                COPY_PAIRS+=("$(printf '%q %q' "${2}" "${3}")")
+                shift 2
                 ;;
 
             -l|--load)
