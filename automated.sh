@@ -607,7 +607,7 @@ files_as_code() {
         mode=$(stat -c "%#03a" "${src}")
         # Not copying owner information intentionally
 
-        boundary=$(md5sum <<< "${dst}" | cut -f 1 -d ' ')
+        boundary="EOF-$(md5sum <<< "${dst}" | cut -f 1 -d ' ')"
 
         cat <<EOF
 touch $(quote "${dst}")
