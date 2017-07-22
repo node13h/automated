@@ -252,6 +252,10 @@ quote () {
     echo "${result}"
 }
 
+md5 () {
+    md5sum <<< "${1}" | cut -f 1 -d ' '
+}
+
 cmd () {
     # to_stderr or to_debug may swallow STDIN intended for the command - hence the simple printf
     if is_true "${DEBUG}"; then
@@ -607,7 +611,7 @@ files_as_code() {
         mode=$(stat -c "%#03a" "${src}")
         # Not copying owner information intentionally
 
-        boundary="EOF-$(md5sum <<< "${dst}" | cut -f 1 -d ' ')"
+        boundary="EOF-$(md5 "${dst}")"
 
         cat <<EOF
 touch $(quote "${dst}")
@@ -622,7 +626,7 @@ EOF
 drop_fn_name () {
     local file_id="${1}"
 
-    printf '%s\n' "drop_$(md5sum <<< "${file_id}" | cut -f 1 -d ' ')"
+    printf '%s\n' "drop_$(md5 "${file_id}")"
 }
 
 
@@ -644,7 +648,7 @@ files_as_functions() {
         mode=$(stat -c "%#03a" "${src}")
         # Not copying owner information intentionally
 
-        boundary="EOF-$(md5sum <<< "${file_id}" | cut -f 1 -d ' ')"
+        boundary="EOF-$(md5 "${file_id}")"
         fn_name=$(drop_fn_name "${file_id}")
 
         cat <<EOF
