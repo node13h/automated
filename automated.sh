@@ -48,6 +48,7 @@ EXPORT_VARS=()
 EXPORT_FUNCTIONS=()
 LOAD_PATHS=()
 COPY_PAIRS=()
+COPY_PAIR_LIST_PROVIDERS=()
 
 SUDO_UID_VARIABLE='AUTOMATED_SUDO_UID'
 OWNER_UID_SOURCE="\${${SUDO_UID_VARIABLE}:-\$(id -u)}"
@@ -488,6 +489,19 @@ OPTIONS:
   --cp LOCAL-SRC-FILE REMOTE-DST-FILE
                               Copy local file to the target(s). Can be specified multiple
                               times.
+  --cp-list FILE              The FILE should be either a text file containing a
+                              list of the source/destination file path pairs or
+                              a executable bash script which will write the mentioned list
+                              to the STDOUT. Script will be executed once for each target
+                              (the target will be passed to the script as a first argument)
+                              thus allowing you to different sets of files to the
+                              different targets in a single run.
+                              Pairs should be separated by spaces, one pair per line.
+                              First goes the local source file path, second -
+                              the remote destination file path.
+                              Use the backslashes to escape the spaces and/or special
+                              characters.
+                              Can be specified multiple times.
   -h, --help                  Display help text and exit
   -v, --verbose               Enable verbose output
   --local                     Do the local call only. Any remote targets will
@@ -674,6 +688,12 @@ execute () {
                 files_as_code < <(printf '%s\n' "${COPY_PAIRS[@]}")
             fi
 
+            if [[ "${#COPY_PAIR_LIST_PROVIDERS[@]}" -gt 0 ]]; then
+                for file_path in "${COPY_PAIR_LIST_PROVIDERS[@]}"; do
+                    files_as_code < <($(readlink -f "${file_path}") "${target}")
+                done
+            fi
+
             if is_true "${DEBUG}"; then
                 echo "DEBUG=TRUE"
             fi
@@ -737,7 +757,7 @@ execute () {
 }
 
 main () {
-    local inventory_file rc
+    local inventory_file rc list_file
     local -a targets=()
 
     [[ "${#}" -gt 0 ]] || display_automated_usage_and_exit 1
@@ -787,6 +807,17 @@ main () {
             --cp)
                 COPY_PAIRS+=("$(printf '%q %q' "${2}" "${3}")")
                 shift 2
+                ;;
+
+            --cp-list)
+                list_file="${2}"
+                shift
+
+                if [[ -x "${list_file}" ]]; then
+                    COPY_PAIR_LIST_PROVIDERS+=("${list_file}")
+                else
+                    mapfile -t -O "${#COPY_PAIRS[@]}" COPY_PAIRS < "${list_file}"
+                fi
                 ;;
 
             -l|--load)
