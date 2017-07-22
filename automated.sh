@@ -49,6 +49,7 @@ EXPORT_FUNCTIONS=()
 LOAD_PATHS=()
 COPY_PAIRS=()
 COPY_PAIR_LIST_PROVIDERS=()
+DRAG_PAIRS=()
 
 SUDO_UID_VARIABLE='AUTOMATED_SUDO_UID'
 OWNER_UID_SOURCE="\${${SUDO_UID_VARIABLE}:-\$(id -u)}"
@@ -502,6 +503,16 @@ OPTIONS:
                               Use the backslashes to escape the spaces and/or special
                               characters.
                               Can be specified multiple times.
+  --drag LOCAL-SRC-FILE FILE-ID
+                              Transport the local file to the target(s).
+                              To actually write file on the remote system use
+                              the drop FILE-ID, REMOTE-DST-FILE function in the script.
+                              Allows for the destination path calculation at runtime on the
+                              remote side.
+                              WARNING: This method is not suitable for the large files
+                              as the contents will be kept in memory during the execution
+                              of the script.
+                              Can be specified multiple times.
   -h, --help                  Display help text and exit
   -v, --verbose               Enable verbose output
   --local                     Do the local call only. Any remote targets will
@@ -608,6 +619,48 @@ EOF
     done
 }
 
+drop_fn_name () {
+    local file_id="${1}"
+
+    printf '%s\n' "drop_$(md5sum <<< "${file_id}" | cut -f 1 -d ' ')"
+}
+
+
+drop () {
+    local file_id="${1}"
+    local dst="${2}"
+
+    # shellcheck disable=SC2091
+    "$(drop_fn_name "${file_id}")" "${dst}"
+}
+
+files_as_functions() {
+    local src file_id mode boundary fn_name
+
+    # shellcheck disable=SC2162
+    while read src file_id; do
+        [[ -f "${src}" ]] || abort "${src} is not a file. Only files are supported"
+
+        mode=$(stat -c "%#03a" "${src}")
+        # Not copying owner information intentionally
+
+        boundary="EOF-$(md5sum <<< "${file_id}" | cut -f 1 -d ' ')"
+        fn_name=$(drop_fn_name "${file_id}")
+
+        cat <<EOF
+${fn_name} () {
+  local dst="\${1}"
+
+  touch "\${dst}"
+  chmod ${mode} "\${dst}"
+  base64 -d <<"${boundary}" | gzip -d >"\${dst}"
+$(gzip -c "${src}" | base64)
+${boundary}
+}
+EOF
+    done
+}
+
 execute () {
     local command="${1}"
     local target="${2:-LOCAL HOST}"
@@ -692,6 +745,10 @@ execute () {
                 for file_path in "${COPY_PAIR_LIST_PROVIDERS[@]}"; do
                     files_as_code < <($(readlink -f "${file_path}") "${target}")
                 done
+            fi
+
+            if [[ "${#DRAG_PAIRS[@]}" -gt 0 ]]; then
+                files_as_functions < <(printf '%s\n' "${DRAG_PAIRS[@]}")
             fi
 
             if is_true "${DEBUG}"; then
@@ -818,6 +875,11 @@ main () {
                 else
                     mapfile -t -O "${#COPY_PAIRS[@]}" COPY_PAIRS < "${list_file}"
                 fi
+                ;;
+
+            --drag)
+                DRAG_PAIRS+=("$(printf '%q %q' "${2}" "${3}")")
+                shift 2
                 ;;
 
             -l|--load)
