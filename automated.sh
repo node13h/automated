@@ -253,7 +253,7 @@ quote () {
 }
 
 md5 () {
-    md5sum <<< "${1}" | cut -f 1 -d ' '
+    md5sum -b | cut -f 1 -d ' '
 }
 
 cmd () {
@@ -611,7 +611,7 @@ files_as_code() {
         mode=$(stat -c "%#03a" "${src}")
         # Not copying owner information intentionally
 
-        boundary="EOF-$(md5 "${dst}")"
+        boundary="EOF-$(md5 <<< "${dst}")"
 
         cat <<EOF
 touch $(quote "${dst}")
@@ -626,7 +626,7 @@ EOF
 drop_fn_name () {
     local file_id="${1}"
 
-    printf '%s\n' "drop_$(md5 "${file_id}")"
+    printf '%s\n' "drop_$(md5 <<< "${file_id}")"
 }
 
 
@@ -648,7 +648,7 @@ files_as_functions() {
         mode=$(stat -c "%#03a" "${src}")
         # Not copying owner information intentionally
 
-        boundary="EOF-$(md5 "${file_id}")"
+        boundary="EOF-$(md5 <<< "${file_id}")"
         fn_name=$(drop_fn_name "${file_id}")
 
         cat <<EOF
