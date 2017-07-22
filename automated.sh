@@ -510,6 +510,8 @@ OPTIONS:
                               Can be specified multiple times.
   --drag LOCAL-SRC-FILE FILE-ID
                               Transport the local file to the target(s).
+                              FILE-ID is a text identifier for referencing this file
+                              in the drop function, must be unique for every file.
                               To actually write file on the remote system use
                               the drop FILE-ID, REMOTE-DST-FILE function in the script.
                               Allows for the destination path calculation at runtime on the
