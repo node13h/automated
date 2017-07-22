@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # An automation tool
 # Copyright (C) 2016 Sergej Alikov <sergej.alikov@gmail.com>
