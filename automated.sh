@@ -50,6 +50,7 @@ LOAD_PATHS=()
 COPY_PAIRS=()
 COPY_PAIR_LIST_PROVIDERS=()
 DRAG_PAIRS=()
+DRAG_PAIR_LIST_PROVIDERS=()
 
 SUDO_UID_VARIABLE='AUTOMATED_SUDO_UID'
 OWNER_UID_SOURCE="\${${SUDO_UID_VARIABLE}:-\$(id -u)}"
@@ -517,6 +518,10 @@ OPTIONS:
                               as the contents will be kept in memory during the execution
                               of the script.
                               Can be specified multiple times.
+  --drag-list FILE            Similar to the --cp-list, but will not write files to the
+                              remote system until the drop function is used (see --drag).
+                              First goes the local source file path, second -
+                              the file id. One pair per line.
   -h, --help                  Display help text and exit
   -v, --verbose               Enable verbose output
   --local                     Do the local call only. Any remote targets will
@@ -755,6 +760,12 @@ execute () {
                 files_as_functions < <(printf '%s\n' "${DRAG_PAIRS[@]}")
             fi
 
+            if [[ "${#DRAG_PAIR_LIST_PROVIDERS[@]}" -gt 0 ]]; then
+                for file_path in "${DRAG_PAIR_LIST_PROVIDERS[@]}"; do
+                    files_as_functions < <($(readlink -f "${file_path}") "${target}")
+                done
+            fi
+
             if is_true "${DEBUG}"; then
                 echo "DEBUG=TRUE"
             fi
@@ -884,6 +895,17 @@ main () {
             --drag)
                 DRAG_PAIRS+=("$(printf '%q %q' "${2}" "${3}")")
                 shift 2
+                ;;
+
+            --drag-list)
+                list_file="${2}"
+                shift
+
+                if [[ -x "${list_file}" ]]; then
+                    DRAG_PAIR_LIST_PROVIDERS+=("${list_file}")
+                else
+                    mapfile -t -O "${#DRAG_PAIRS[@]}" DRAG_PAIRS < "${list_file}"
+                fi
                 ;;
 
             -l|--load)
