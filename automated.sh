@@ -47,6 +47,10 @@ TMUX_SOCK_PREFIX="/tmp/tmux-automated"
 EXPORT_VARS=()
 EXPORT_FUNCTIONS=()
 LOAD_PATHS=()
+COPY_PAIRS=()
+COPY_PAIR_LIST_PROVIDERS=()
+DRAG_PAIRS=()
+DRAG_PAIR_LIST_PROVIDERS=()
 
 SUDO_UID_VARIABLE='AUTOMATED_SUDO_UID'
 OWNER_UID_SOURCE="\${${SUDO_UID_VARIABLE}:-\$(id -u)}"
@@ -247,6 +251,10 @@ quote () {
     done
 
     echo "${result}"
+}
+
+md5 () {
+    md5sum -b | cut -f 1 -d ' '
 }
 
 cmd () {
@@ -484,6 +492,38 @@ OPTIONS:
   -l, --load <PATH>           Load file at specified PATH before calling
                               the command; in case PATH is a directory -
                               load *.sh from it. Can be specified multiple times.
+  --cp LOCAL-SRC-FILE REMOTE-DST-FILE
+                              Copy local file to the target(s). Can be specified multiple
+                              times.
+  --cp-list FILE              The FILE should be either a text file containing a
+                              list of the source/destination file path pairs or
+                              a executable bash script which will write the mentioned list
+                              to the STDOUT. Script will be executed once for each target
+                              (the target will be passed to the script as a first argument)
+                              thus allowing you to different sets of files to the
+                              different targets in a single run.
+                              Pairs should be separated by spaces, one pair per line.
+                              First goes the local source file path, second -
+                              the remote destination file path.
+                              Use the backslashes to escape the spaces and/or special
+                              characters.
+                              Can be specified multiple times.
+  --drag LOCAL-SRC-FILE FILE-ID
+                              Transport the local file to the target(s).
+                              FILE-ID is a text identifier for referencing this file
+                              in the drop function, must be unique for every file.
+                              To actually write file on the remote system use
+                              the drop FILE-ID, REMOTE-DST-FILE function in the script.
+                              Allows for the destination path calculation at runtime on the
+                              remote side.
+                              WARNING: This method is not suitable for the large files
+                              as the contents will be kept in memory during the execution
+                              of the script.
+                              Can be specified multiple times.
+  --drag-list FILE            Similar to the --cp-list, but will not write files to the
+                              remote system until the drop function is used (see --drag).
+                              First goes the local source file path, second -
+                              the file id. One pair per line.
   -h, --help                  Display help text and exit
   -v, --verbose               Enable verbose output
   --local                     Do the local call only. Any remote targets will
@@ -568,6 +608,81 @@ pty_helper_settings () {
     echo "SUDO_UID_VARIABLE=\"${SUDO_UID_VARIABLE}\" EXIT_TIMEOUT=\"${EXIT_TIMEOUT}\" EXIT_SUDO_PASSWORD_NOT_ACCEPTED=\"${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}\" EXIT_SUDO_PASSWORD_REQUIRED=\"${EXIT_SUDO_PASSWORD_REQUIRED}\""
 }
 
+files_as_code() {
+    local src dst mode boundary
+    local eof=false
+
+    until ${eof}; do
+
+        # shellcheck disable=SC2162
+        read src dst || eof=true
+
+        [[ -n "${src}" && -n "${dst}" ]] || continue
+
+        [[ -f "${src}" ]] || abort "${src} is not a file. Only files are supported"
+
+        mode=$(stat -c "%#03a" "${src}")
+        # Not copying owner information intentionally
+
+        boundary="EOF-$(md5 <<< "${dst}")"
+
+        cat <<EOF
+touch $(quote "${dst}")
+chmod ${mode} $(quote "${dst}")
+base64 -d <<"${boundary}" | gzip -d >$(quote "${dst}")
+$(gzip -c "${src}" | base64)
+${boundary}
+EOF
+    done
+}
+
+drop_fn_name () {
+    local file_id="${1}"
+
+    printf '%s\n' "drop_$(md5 <<< "${file_id}")"
+}
+
+
+drop () {
+    local file_id="${1}"
+    local dst="${2}"
+
+    # shellcheck disable=SC2091
+    "$(drop_fn_name "${file_id}")" "${dst}"
+}
+
+files_as_functions() {
+    local src file_id mode boundary fn_name
+    local eof=false
+
+    until ${eof}; do
+        # shellcheck disable=SC2162
+        read src file_id || eof=true
+
+        [[ -n "${src}" && -n "${file_id}" ]] || continue
+
+        [[ -f "${src}" ]] || abort "${src} is not a file. Only files are supported"
+
+        mode=$(stat -c "%#03a" "${src}")
+        # Not copying owner information intentionally
+
+        boundary="EOF-$(md5 <<< "${file_id}")"
+        fn_name=$(drop_fn_name "${file_id}")
+
+        cat <<EOF
+${fn_name} () {
+  local dst="\${1}"
+
+  touch "\${dst}"
+  chmod ${mode} "\${dst}"
+  base64 -d <<"${boundary}" | gzip -d >"\${dst}"
+$(gzip -c "${src}" | base64)
+${boundary}
+}
+EOF
+    done
+}
+
 execute () {
     local command="${1}"
     local target="${2:-LOCAL HOST}"
@@ -644,6 +759,26 @@ execute () {
                 done < <(loadable_files "${LOAD_PATHS[@]}")
             fi
 
+            if [[ "${#COPY_PAIRS[@]}" -gt 0 ]]; then
+                files_as_code < <(printf '%s\n' "${COPY_PAIRS[@]}")
+            fi
+
+            if [[ "${#COPY_PAIR_LIST_PROVIDERS[@]}" -gt 0 ]]; then
+                for file_path in "${COPY_PAIR_LIST_PROVIDERS[@]}"; do
+                    files_as_code < <($(readlink -f "${file_path}") "${target}")
+                done
+            fi
+
+            if [[ "${#DRAG_PAIRS[@]}" -gt 0 ]]; then
+                files_as_functions < <(printf '%s\n' "${DRAG_PAIRS[@]}")
+            fi
+
+            if [[ "${#DRAG_PAIR_LIST_PROVIDERS[@]}" -gt 0 ]]; then
+                for file_path in "${DRAG_PAIR_LIST_PROVIDERS[@]}"; do
+                    files_as_functions < <($(readlink -f "${file_path}") "${target}")
+                done
+            fi
+
             if is_true "${DEBUG}"; then
                 echo "DEBUG=TRUE"
             fi
@@ -707,7 +842,7 @@ execute () {
 }
 
 main () {
-    local inventory_file rc
+    local inventory_file rc list_file
     local -a targets=()
 
     [[ "${#}" -gt 0 ]] || display_automated_usage_and_exit 1
@@ -752,6 +887,38 @@ main () {
             --tmux-sock-prefix)
                 TMUX_SOCK_PREFIX="${2}"
                 shift
+                ;;
+
+            --cp)
+                COPY_PAIRS+=("$(printf '%q %q' "${2}" "${3}")")
+                shift 2
+                ;;
+
+            --cp-list)
+                list_file="${2}"
+                shift
+
+                if [[ -x "${list_file}" ]]; then
+                    COPY_PAIR_LIST_PROVIDERS+=("${list_file}")
+                else
+                    mapfile -t -O "${#COPY_PAIRS[@]}" COPY_PAIRS < "${list_file}"
+                fi
+                ;;
+
+            --drag)
+                DRAG_PAIRS+=("$(printf '%q %q' "${2}" "${3}")")
+                shift 2
+                ;;
+
+            --drag-list)
+                list_file="${2}"
+                shift
+
+                if [[ -x "${list_file}" ]]; then
+                    DRAG_PAIR_LIST_PROVIDERS+=("${list_file}")
+                else
+                    mapfile -t -O "${#DRAG_PAIRS[@]}" DRAG_PAIRS < "${list_file}"
+                fi
                 ;;
 
             -l|--load)
