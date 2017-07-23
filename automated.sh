@@ -610,9 +610,15 @@ pty_helper_settings () {
 
 files_as_code() {
     local src dst mode boundary
+    local eof=false
 
-    # shellcheck disable=SC2162
-    while read src dst; do
+    until ${eof}; do
+
+        # shellcheck disable=SC2162
+        read src dst || eof=true
+
+        [[ -n "${src}" && -n "${dst}" ]] || continue
+
         [[ -f "${src}" ]] || abort "${src} is not a file. Only files are supported"
 
         mode=$(stat -c "%#03a" "${src}")
@@ -647,9 +653,14 @@ drop () {
 
 files_as_functions() {
     local src file_id mode boundary fn_name
+    local eof=false
 
-    # shellcheck disable=SC2162
-    while read src file_id; do
+    until ${eof}; do
+        # shellcheck disable=SC2162
+        read src file_id || eof=true
+
+        [[ -n "${src}" && -n "${file_id}" ]] || continue
+
         [[ -f "${src}" ]] || abort "${src} is not a file. Only files are supported"
 
         mode=$(stat -c "%#03a" "${src}")
