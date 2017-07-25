@@ -612,7 +612,7 @@ file_as_code () {
     local dst="${2}"
     local mode boundary
 
-    [[ -f "${src}" ]] || throw "${src} is not a file. Only files are supported"
+    ! [[ -d "${src}" ]] || throw "${src} is a directory. Directories are not supported"
 
     mode=$(stat -c "%#03a" "${src}")
     # Not copying owner information intentionally
@@ -664,7 +664,7 @@ file_as_function () {
     local file_id="${2}"
     local mode boundary fn_name
 
-    [[ -f "${src}" ]] || throw "${src} is not a file. Only files are supported"
+    ! [[ -d "${src}" ]] || throw "${src} is a directory. Directories are not supported"
 
     mode=$(stat -c "%#03a" "${src}")
     # Not copying owner information intentionally
