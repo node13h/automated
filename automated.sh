@@ -51,6 +51,7 @@ COPY_PAIRS=()
 COPY_PAIR_LIST_PROVIDERS=()
 DRAG_PAIRS=()
 DRAG_PAIR_LIST_PROVIDERS=()
+MACROS=()
 
 SUDO_UID_VARIABLE='AUTOMATED_SUDO_UID'
 OWNER_UID_SOURCE="\${${SUDO_UID_VARIABLE}:-\$(id -u)}"
@@ -524,6 +525,11 @@ OPTIONS:
                               remote system until the drop function is used (see --drag).
                               First goes the local source file path, second -
                               the file id. One pair per line.
+  -m, --macro FILE            FILE is an executable file. It will be run locally with
+                              a target as an argument. The output will be sent to the
+                              target and executed in the remote bash before the COMMAND.
+                              Use this to dynamically produce the target-specific scripts.
+                              Can be specified multiple times.
   -h, --help                  Display help text and exit
   -v, --verbose               Enable verbose output
   --local                     Do the local call only. Any remote targets will
@@ -788,6 +794,12 @@ execute () {
             echo "# Facts"
             echo "get_the_facts"
 
+            if [[ "${#MACROS[@]}" -gt 0 ]]; then
+                for file_path in "${MACROS[@]}"; do
+                    $(readlink -f "${file_path}") "${target}"
+                done
+            fi
+
             echo "# Entry point"
             echo "${command}"
 
@@ -919,6 +931,11 @@ main () {
                 else
                     mapfile -t -O "${#DRAG_PAIRS[@]}" DRAG_PAIRS < "${list_file}"
                 fi
+                ;;
+
+            -m|--macro)
+                MACROS+=("${2}")
+                shift
                 ;;
 
             -l|--load)
