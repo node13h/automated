@@ -233,11 +233,6 @@ msg_debug () {
     echo "DEBUG ${*}" | to_debug
 }
 
-abort () {
-    echo "${*}" | to_stderr
-    exit 1
-}
-
 throw () {
     echo "${*}" | to_stderr
     return 1
@@ -321,7 +316,7 @@ get_the_facts () {
                  echo "FACT_OS_RELEASE=${VERSION}")
 
     else
-        abort "Unsupported operating system"
+        throw "Unsupported operating system"
     fi
 }
 
@@ -343,7 +338,7 @@ packages_ensure () {
             apt-get -yqq remove "${@}"
             ;;
         *)
-            abort "Command ${command} is unsupported on ${FACT_OS_FAMILY}"
+            throw "Command ${command} is unsupported on ${FACT_OS_FAMILY}"
             ;;
     esac
 }
@@ -377,7 +372,7 @@ service_ensure () {
                 update-rc.d "${service}" disable
                 ;;
             *)
-                abort "Command ${command} is unsupported on ${FACT_OS_FAMILY}"
+                throw "Command ${command} is unsupported on ${FACT_OS_FAMILY}"
                 ;;
         esac
     fi
@@ -411,7 +406,7 @@ run_in_multiplexer () {
     local multiplexer
 
     if ! multiplexer=$(multiplexer_present); then
-        abort "Multiplexer is not available. Please install one of the following: ${SUPPORTED_MULTIPLEXERS[*]}"
+        throw "Multiplexer is not available. Please install one of the following: ${SUPPORTED_MULTIPLEXERS[*]}"
     fi
 
     case "${multiplexer}" in
@@ -960,7 +955,7 @@ main () {
                 if [[ -r "${inventory_file}" ]]; then
                     mapfile -t -O "${#targets[@]}" targets < "${inventory_file}"
                 else
-                    abort "Could not read inventory file"
+                    throw "Could not read inventory file"
                 fi
                 ;;
 
@@ -991,7 +986,7 @@ main () {
             fi
         done
     else
-        abort "No targets specified"
+        throw "No targets specified"
     fi
 }
 
