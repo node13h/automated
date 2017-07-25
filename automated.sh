@@ -48,9 +48,7 @@ EXPORT_VARS=()
 EXPORT_FUNCTIONS=()
 LOAD_PATHS=()
 COPY_PAIRS=()
-COPY_PAIR_LIST_PROVIDERS=()
 DRAG_PAIRS=()
-DRAG_PAIR_LIST_PROVIDERS=()
 MACROS=()
 
 SUDO_UID_VARIABLE='AUTOMATED_SUDO_UID'
@@ -496,13 +494,8 @@ OPTIONS:
   --cp LOCAL-SRC-FILE REMOTE-DST-FILE
                               Copy local file to the target(s). Can be specified multiple
                               times.
-  --cp-list FILE              The FILE should be either a text file containing a
-                              list of the source/destination file path pairs or
-                              a executable bash script which will write the mentioned list
-                              to the STDOUT. Script will be executed once for each target
-                              (the target will be passed to the script as a first argument)
-                              thus allowing you to different sets of files to the
-                              different targets in a single run.
+  --cp-list FILE              The FILE is a text file containing a list of the
+                              source/destination file path pairs.
                               Pairs should be separated by spaces, one pair per line.
                               First goes the local source file path, second -
                               the remote destination file path.
@@ -769,20 +762,8 @@ execute () {
                 files_as_code < <(printf '%s\n' "${COPY_PAIRS[@]}")
             fi
 
-            if [[ "${#COPY_PAIR_LIST_PROVIDERS[@]}" -gt 0 ]]; then
-                for file_path in "${COPY_PAIR_LIST_PROVIDERS[@]}"; do
-                    files_as_code < <($(readlink -f "${file_path}") "${target}")
-                done
-            fi
-
             if [[ "${#DRAG_PAIRS[@]}" -gt 0 ]]; then
                 files_as_functions < <(printf '%s\n' "${DRAG_PAIRS[@]}")
-            fi
-
-            if [[ "${#DRAG_PAIR_LIST_PROVIDERS[@]}" -gt 0 ]]; then
-                for file_path in "${DRAG_PAIR_LIST_PROVIDERS[@]}"; do
-                    files_as_functions < <($(readlink -f "${file_path}") "${target}")
-                done
             fi
 
             if is_true "${DEBUG}"; then
@@ -854,7 +835,7 @@ execute () {
 }
 
 main () {
-    local inventory_file rc list_file
+    local inventory_file rc
     local -a targets=()
 
     [[ "${#}" -gt 0 ]] || display_automated_usage_and_exit 1
@@ -910,11 +891,7 @@ main () {
                 list_file="${2}"
                 shift
 
-                if [[ -x "${list_file}" ]]; then
-                    COPY_PAIR_LIST_PROVIDERS+=("${list_file}")
-                else
-                    mapfile -t -O "${#COPY_PAIRS[@]}" COPY_PAIRS < "${list_file}"
-                fi
+                mapfile -t -O "${#COPY_PAIRS[@]}" COPY_PAIRS < "${list_file}"
                 ;;
 
             --drag)
@@ -926,11 +903,7 @@ main () {
                 list_file="${2}"
                 shift
 
-                if [[ -x "${list_file}" ]]; then
-                    DRAG_PAIR_LIST_PROVIDERS+=("${list_file}")
-                else
-                    mapfile -t -O "${#DRAG_PAIRS[@]}" DRAG_PAIRS < "${list_file}"
-                fi
+                mapfile -t -O "${#DRAG_PAIRS[@]}" DRAG_PAIRS < "${list_file}"
                 ;;
 
             -m|--macro)
