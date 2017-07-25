@@ -612,8 +612,29 @@ pty_helper_settings () {
     echo "SUDO_UID_VARIABLE=\"${SUDO_UID_VARIABLE}\" EXIT_TIMEOUT=\"${EXIT_TIMEOUT}\" EXIT_SUDO_PASSWORD_NOT_ACCEPTED=\"${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}\" EXIT_SUDO_PASSWORD_REQUIRED=\"${EXIT_SUDO_PASSWORD_REQUIRED}\""
 }
 
-files_as_code() {
-    local src dst mode boundary
+file_as_code () {
+    local src="${1}"
+    local dst="${2}"
+    local mode boundary
+
+    [[ -f "${src}" ]] || throw "${src} is not a file. Only files are supported"
+
+    mode=$(stat -c "%#03a" "${src}")
+    # Not copying owner information intentionally
+
+    boundary="EOF-$(md5 <<< "${dst}")"
+
+    cat <<EOF
+touch $(quote "${dst}")
+chmod ${mode} $(quote "${dst}")
+base64 -d <<"${boundary}" | gzip -d >$(quote "${dst}")
+$(gzip -c "${src}" | base64)
+${boundary}
+EOF
+}
+
+files_as_code () {
+    local src dst
     local eof=false
 
     until ${eof}; do
@@ -623,20 +644,8 @@ files_as_code() {
 
         [[ -n "${src}" && -n "${dst}" ]] || continue
 
-        [[ -f "${src}" ]] || abort "${src} is not a file. Only files are supported"
+        file_as_code "${src}" "${dst}"
 
-        mode=$(stat -c "%#03a" "${src}")
-        # Not copying owner information intentionally
-
-        boundary="EOF-$(md5 <<< "${dst}")"
-
-        cat <<EOF
-touch $(quote "${dst}")
-chmod ${mode} $(quote "${dst}")
-base64 -d <<"${boundary}" | gzip -d >$(quote "${dst}")
-$(gzip -c "${src}" | base64)
-${boundary}
-EOF
     done
 }
 
@@ -655,25 +664,20 @@ drop () {
     "$(drop_fn_name "${file_id}")" "${dst}"
 }
 
-files_as_functions() {
-    local src file_id mode boundary fn_name
-    local eof=false
+file_as_function () {
+    local src="${1}"
+    local file_id="${2}"
+    local mode boundary fn_name
 
-    until ${eof}; do
-        # shellcheck disable=SC2162
-        read src file_id || eof=true
+    [[ -f "${src}" ]] || throw "${src} is not a file. Only files are supported"
 
-        [[ -n "${src}" && -n "${file_id}" ]] || continue
+    mode=$(stat -c "%#03a" "${src}")
+    # Not copying owner information intentionally
 
-        [[ -f "${src}" ]] || abort "${src} is not a file. Only files are supported"
+    boundary="EOF-$(md5 <<< "${file_id}")"
+    fn_name=$(drop_fn_name "${file_id}")
 
-        mode=$(stat -c "%#03a" "${src}")
-        # Not copying owner information intentionally
-
-        boundary="EOF-$(md5 <<< "${file_id}")"
-        fn_name=$(drop_fn_name "${file_id}")
-
-        cat <<EOF
+    cat <<EOF
 ${fn_name} () {
   local dst="\${1}"
 
@@ -684,6 +688,19 @@ $(gzip -c "${src}" | base64)
 ${boundary}
 }
 EOF
+}
+
+files_as_functions () {
+    local src file_id
+    local eof=false
+
+    until ${eof}; do
+        # shellcheck disable=SC2162
+        read src file_id || eof=true
+
+        [[ -n "${src}" && -n "${file_id}" ]] || continue
+
+        file_as_function "${src}" "${file_id}"
     done
 }
 
