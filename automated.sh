@@ -238,6 +238,11 @@ abort () {
     exit 1
 }
 
+throw () {
+    echo "${*}" | to_stderr
+    return 1
+}
+
 to_file () {
     tee "${1}" | to_debug "${1}"
 }
