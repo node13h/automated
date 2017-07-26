@@ -521,10 +521,10 @@ OPTIONS:
                               to the remote system until the drop function is
                               used (see --drag). First goes the local source
                               file path, second - the file id. One pair per line.
-  -m, --macro EXPRESSION      Locally evaluate the EXPRESSION with a current
-                              target as an argument. The _output_ of the
-                              EXPRESSION will be remotely executed by the
-                              current target.
+  -m, --macro EXPRESSION      Locally evaluate the EXPRESSION. The _output_ of
+                              the EXPRESSION will be remotely executed by the
+                              current target (current target is stored in
+                              the \$target variable).
                               Use this to dynamically produce the target-
                               specific scripts.
                               Can be specified multiple times.
@@ -801,7 +801,7 @@ execute () {
 
             if [[ "${#MACROS[@]}" -gt 0 ]]; then
                 for macro in "${MACROS[@]}"; do
-                    eval "${macro} $(quote "${target}")"
+                    eval "${macro}"
                 done
             fi
 
