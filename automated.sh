@@ -518,10 +518,12 @@ OPTIONS:
                               remote system until the drop function is used (see --drag).
                               First goes the local source file path, second -
                               the file id. One pair per line.
-  -m, --macro FILE            FILE is an executable file. It will be run locally with
-                              a target as an argument. The output will be sent to the
-                              target and executed in the remote bash before the COMMAND.
-                              Use this to dynamically produce the target-specific scripts.
+  -m, --macro EXPRESSION      Locally evaluate the EXPRESSION with a current
+                              target as an argument. The _output_ of the
+                              EXPRESSION will be remotely executed by the
+                              current target.
+                              Use this to dynamically produce the target-
+                              specific scripts.
                               Can be specified multiple times.
   -h, --help                  Display help text and exit
   -v, --verbose               Enable verbose output
@@ -706,7 +708,7 @@ execute () {
     local sudo_password
     local force_sudo_password=FALSE
 
-    local handler var_definition file_path rc do_attach multiplexer fn
+    local handler var_definition file_path rc do_attach multiplexer fn macro
 
     # Loop until SUDO password is accepted
     while true; do
@@ -793,8 +795,8 @@ execute () {
             echo "get_the_facts"
 
             if [[ "${#MACROS[@]}" -gt 0 ]]; then
-                for file_path in "${MACROS[@]}"; do
-                    $(readlink -f "${file_path}") "${target}"
+                for macro in "${MACROS[@]}"; do
+                    eval "${macro} $(quote "${target}")"
                 done
             fi
 
