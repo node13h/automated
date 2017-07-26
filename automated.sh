@@ -22,6 +22,7 @@ set -o pipefail
 # TODO Throw error on unsupported systems (CentOS5, perhaps Ubuntu 10.04)
 
 PROG=$(basename "${BASH_SOURCE:-}")
+LOCAL_KERNEL=$(uname -s)
 
 DEBUG=FALSE
 DISABLE_COLOUR=FALSE
@@ -274,6 +275,22 @@ readable_file () {
 
 readable_directory () {
     [[ -d "${1}" && -r "${1}" ]]
+}
+
+file_mode () {
+    local path="${1}"
+
+    case "${LOCAL_KERNEL}" in
+        FreeBSD|OpenBSD|Darwin)
+            stat -f '%#Mp%03Lp' "${path}"
+            ;;
+        Linux)
+            stat -c "%#03a" "${path}"
+            ;;
+        *)
+            python -c "import sys, os, stat; print oct(stat.S_IMODE(os.stat(sys.argv[1]).st_mode))" "${path}"
+            ;;
+    esac
 }
 
 get_the_facts () {
@@ -621,7 +638,7 @@ file_as_code () {
 
     ! [[ -d "${src}" ]] || throw "${src} is a directory. Directories are not supported"
 
-    mode=$(stat -c "%#03a" "${src}")
+    mode=$(file_mode "${src}")
     # Not copying owner information intentionally
 
     boundary="EOF-$(md5 <<< "${dst}")"
@@ -673,7 +690,7 @@ file_as_function () {
 
     ! [[ -d "${src}" ]] || throw "${src} is a directory. Directories are not supported"
 
-    mode=$(stat -c "%#03a" "${src}")
+    mode=$(file_mode "${src}")
     # Not copying owner information intentionally
 
     boundary="EOF-$(md5 <<< "${file_id}")"
