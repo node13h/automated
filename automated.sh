@@ -480,44 +480,47 @@ Runs commands on local host or one or more remote targets.
 OPTIONS:
 
   -s, --sudo                  Use SUDO to do the calls
-  --sudo-passwordless         Don't ask for SUDO password. Will ask anyway if target insists.
+  --sudo-passwordless         Don't ask for SUDO password. Will ask anyway if
+                              target insists.
   --sudo-password-on-stdin    Read SUDO password from STDIN
-  -c, --call <COMMAND>        Command to call. Default is "${CMD}"
-  -i, --inventory <FILE>      Load list of targets from the FILE
-  -e, --export <NAME>         Make NAME from local environment available on the remote
-                              side. NAME can be either variable or function name.
-                              Functions have to be exported with the 'export -f NAME'
-                              first (bash-specific). May be specified multiple times
-  -l, --load <PATH>           Load file at specified PATH before calling
+  -c, --call COMMAND          Command to call. Default is "${CMD}"
+  -i, --inventory FILE        Load list of targets from the FILE
+  -e, --export NAME           Make NAME from local environment available on the
+                              remote side. NAME can be either variable or
+                              function name. Functions have to be exported with
+                              the 'export -f NAME' first (bash-specific).
+                              May be specified multiple times
+  -l, --load PATH             Load file at specified PATH before calling
                               the command; in case PATH is a directory -
                               load *.sh from it. Can be specified multiple times.
   --cp LOCAL-SRC-FILE REMOTE-DST-FILE
-                              Copy local file to the target(s). Can be specified multiple
-                              times.
+                              Copy local file to the target(s).
+                              Can be specified multiple times.
   --cp-list FILE              The FILE is a text file containing a list of the
                               source/destination file path pairs.
-                              Pairs should be separated by spaces, one pair per line.
-                              First goes the local source file path, second -
-                              the remote destination file path.
-                              Use the backslashes to escape the spaces and/or special
-                              characters.
+                              Pairs should be separated by spaces, one pair per
+                              line. First goes the local source file path,
+                              second - the remote destination file path.
+                              Use the backslashes to escape the spaces and/or
+                              special characters.
                               Can be specified multiple times.
   --drag LOCAL-SRC-FILE FILE-ID
                               Transport the local file to the target(s).
-                              FILE-ID is a text identifier for referencing this file
-                              in the drop function, must be unique for every file.
-                              To actually write file on the remote system use
-                              the drop FILE-ID, REMOTE-DST-FILE function in the script.
-                              Allows for the destination path calculation at runtime on the
-                              remote side.
-                              WARNING: This method is not suitable for the large files
-                              as the contents will be kept in memory during the execution
-                              of the script.
+                              FILE-ID is a text identifier for referencing this
+                              file in the drop function, must be unique for
+                              every file. To actually write file on the remote
+                              system use the drop FILE-ID, REMOTE-DST-FILE
+                              function in the script.
+                              Allows for the destination path calculation at
+                              runtime on the remote side.
+                              WARNING: This method is not suitable for the large
+                              files as the contents will be kept in memory
+                              during the execution of the script.
                               Can be specified multiple times.
-  --drag-list FILE            Similar to the --cp-list, but will not write files to the
-                              remote system until the drop function is used (see --drag).
-                              First goes the local source file path, second -
-                              the file id. One pair per line.
+  --drag-list FILE            Similar to the --cp-list, but will not write files
+                              to the remote system until the drop function is
+                              used (see --drag). First goes the local source
+                              file path, second - the file id. One pair per line.
   -m, --macro EXPRESSION      Locally evaluate the EXPRESSION with a current
                               target as an argument. The _output_ of the
                               EXPRESSION will be remotely executed by the
@@ -529,13 +532,15 @@ OPTIONS:
   -v, --verbose               Enable verbose output
   --local                     Do the local call only. Any remote targets will
                               be ignored.
-  --dont-attach               When running a command in the terminal multiplexer - proceed to the
-                              next host immediately without attaching to the multiplexer.
-  --ignore-failed             If one of the targets has failed - proceed to the next one. Exit
-                              codes will be lost.
-  --dump-script               Output compiled script to STDOUT. Do not run anything. Implies
-                              the local operation.
-  --tmux-sock-prefix <PATH>   Use custom PATH prefix for tmux socket on the target.
+  --dont-attach               When running a command in the terminal
+                              multiplexer - proceed to the next host immediately
+                              without attaching to the multiplexer.
+  --ignore-failed             If one of the targets has failed - proceed to the
+                              next one. Exit codes will be lost.
+  --dump-script               Output compiled script to STDOUT. Do not run
+                              anything. Implies the local operation.
+  --tmux-sock-prefix PATH     Use custom PATH prefix for tmux socket on the
+                              target.
                               Default: ${TMUX_SOCK_PREFIX}
 
 EOF
