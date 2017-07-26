@@ -75,7 +75,6 @@ main () {
 
     ssl_facts
 
-    # FIXME quote in the file_as_code quotes the dollar sign on fact var
     file_as_function <(decrypted_key "${key}" "${passphrase}") ssl-key
     file_as_function "${cert}" ssl-cert
     file_as_function "${cacert}" ssl-cacert
