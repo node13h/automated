@@ -340,7 +340,7 @@ md5 () {
 }
 
 cmd () {
-    msg "CMD $(quoted "${@}")" "${ANSI_FG_GREEN}"
+    printf 'CMD %s\n' "$(quoted "${@}")" | to_debug "${ANSI_FG_GREEN}"
 
     "${@}"
 }
