@@ -311,7 +311,18 @@ throw () {
 }
 
 to_file () {
-    tee "${1}" | printable_only | text_block "${1}" | to_debug "${ANSI_FG_BRIGHT_BLACK}"
+  local target_path="$1"
+  local restore_pipefail
+
+  # diff will return non-zero exit code if file differs, therefore
+  # pipefail shell attribute should be disabled for this
+  # special case
+  restore_pipefail=$(shopt -p -o pipefail)
+  set +o pipefail
+
+  diff -duaN "$target_path" - | tee >(printable_only | text_block "${1}" | to_debug "${ANSI_FG_BRIGHT_BLACK}") | patch --binary -s -p0 "$target_path"
+
+  eval "$restore_pipefail"
 }
 
 quoted () {
