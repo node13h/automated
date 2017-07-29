@@ -314,7 +314,7 @@ to_file () {
     tee "${1}" | printable_only | text_block "${1}" | to_debug "${ANSI_FG_BRIGHT_BLACK}"
 }
 
-quote () {
+quoted () {
     local -a result=()
 
     for token in "${@}"; do
@@ -329,7 +329,7 @@ md5 () {
 }
 
 cmd () {
-    msg "CMD $(quote "${@}")" "${ANSI_FG_GREEN}"
+    msg "CMD $(quoted "${@}")" "${ANSI_FG_GREEN}"
 
     "${@}"
 }
@@ -658,7 +658,7 @@ env_var_definitions () {
 
     for var in "${@}"; do
         if [[ -n ${!var+set} ]]; then
-            printf '%s=%s\n' "${var}" "$(quote "${!var}")"
+            printf '%s=%s\n' "${var}" "$(quoted "${!var}")"
         fi
     done
 }
@@ -713,7 +713,7 @@ pty_helper_settings () {
     local -a result=()
 
     for var in SUDO_UID_VARIABLE EXIT_TIMEOUT EXIT_SUDO_PASSWORD_NOT_ACCEPTED EXIT_SUDO_PASSWORD_REQUIRED; do
-        result+=("${var}=$(quote "${!var}")")
+        result+=("${var}=$(quoted "${!var}")")
     done
 
     printf '%s\n' "${result[*]}"
@@ -732,9 +732,9 @@ file_as_code () {
     boundary="EOF-$(md5 <<< "${dst}")"
 
     cat <<EOF
-touch $(quote "${dst}")
-chmod ${mode} $(quote "${dst}")
-base64 -d <<"${boundary}" | gzip -d >$(quote "${dst}")
+touch $(quoted "${dst}")
+chmod ${mode} $(quoted "${dst}")
+base64 -d <<"${boundary}" | gzip -d >$(quoted "${dst}")
 EOF
 
     gzip -c "${src}" | base64
