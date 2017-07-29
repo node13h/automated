@@ -647,7 +647,11 @@ file_as_code () {
 touch $(quote "${dst}")
 chmod ${mode} $(quote "${dst}")
 base64 -d <<"${boundary}" | gzip -d >$(quote "${dst}")
-$(gzip -c "${src}" | base64)
+EOF
+
+    gzip -c "${src}" | base64
+
+    cat <<EOF
 ${boundary}
 EOF
 }
@@ -703,7 +707,11 @@ ${fn_name} () {
   touch "\${dst}"
   chmod ${mode} "\${dst}"
   base64 -d <<"${boundary}" | gzip -d >"\${dst}"
-$(gzip -c "${src}" | base64)
+EOF
+
+    gzip -c "${src}" | base64
+
+    cat <<EOF
 ${boundary}
 }
 EOF
