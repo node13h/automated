@@ -731,6 +731,80 @@ files_as_functions () {
     done
 }
 
+render_script () {
+    local command="${1}"
+
+    local file_path var_definition macro
+
+    # sudo password has to go first!
+    if is_true "${SUDO}"; then
+        if is_true "${DUMP_SCRIPT}"; then
+            echo '*** SUDO PASSWORD IS HIDDEN IN SCRIPT DUMP MODE ***'
+        else
+            echo "${sudo_password}"  # This one will be consumed by the PTY helper
+        fi
+    fi
+
+    if [[ "${#EXPORT_VARS[@]}" -gt 0 ]]; then
+        echo "# Vars"
+        msg_debug "Exporting variables"
+        while read -r var_definition; do
+            msg_debug "${var_definition}"
+            echo "${var_definition}"
+        done < <(env_var_definitions "${EXPORT_VARS[@]}")
+    fi
+
+    if [[ "${#EXPORT_FUNCTIONS[@]}" -gt 0 ]]; then
+        echo "# Functions"
+        msg_debug "Exporting functions"
+
+        for fn in "${EXPORT_FUNCTIONS[@]}"; do
+            declare -f "${fn}"
+        done
+    fi
+
+    echo "# ${PROG}"
+    msg_debug "Concatenating ${BASH_SOURCE[0]}"
+    cat "${BASH_SOURCE[0]}"
+
+    if [[ "${#LOAD_PATHS[@]}" -gt 0 ]]; then
+        while read -r file_path; do
+            msg_debug "Concatenating ${file_path}"
+            echo "# $(basename "${file_path}")"
+            cat "${file_path}"
+            newline
+        done < <(loadable_files "${LOAD_PATHS[@]}")
+    fi
+
+    if [[ "${#COPY_PAIRS[@]}" -gt 0 ]]; then
+        files_as_code < <(printf '%s\n' "${COPY_PAIRS[@]}")
+    fi
+
+    if [[ "${#DRAG_PAIRS[@]}" -gt 0 ]]; then
+        files_as_functions < <(printf '%s\n' "${DRAG_PAIRS[@]}")
+    fi
+
+    if is_true "${DEBUG}"; then
+        echo "DEBUG=TRUE"
+    fi
+    echo "AUTOMATED_OWNER_UID=${OWNER_UID_SOURCE}"
+    echo "TMUX_SOCK_PREFIX=${TMUX_SOCK_PREFIX}"
+
+    echo "# Facts"
+    echo "get_the_facts"
+
+    if [[ "${#MACROS[@]}" -gt 0 ]]; then
+        for macro in "${MACROS[@]}"; do
+            eval "${macro}"
+        done
+    fi
+
+    echo "# Entry point"
+    echo "${command}"
+
+}
+
+
 execute () {
     local command="${1}"
     local target="${2:-LOCAL HOST}"
@@ -738,7 +812,7 @@ execute () {
     local sudo_password
     local force_sudo_password=FALSE
 
-    local handler var_definition file_path rc do_attach multiplexer fn macro
+    local handler rc do_attach multiplexer fn
 
     # Loop until SUDO password is accepted
     while true; do
@@ -766,74 +840,8 @@ execute () {
         fi
 
         msg_debug "Executing on ${target}"
-        {
-            # sudo password has to go first!
-            if is_true "${SUDO}"; then
-                if is_true "${DUMP_SCRIPT}"; then
-                    echo '*** SUDO PASSWORD IS HIDDEN IN SCRIPT DUMP MODE ***'
-                else
-                    echo "${sudo_password}"  # This one will be consumed by the PTY helper
-                fi
-            fi
 
-            if [[ "${#EXPORT_VARS[@]}" -gt 0 ]]; then
-                echo "# Vars"
-                msg_debug "Exporting variables"
-                while read -r var_definition; do
-                    msg_debug "${var_definition}"
-                    echo "${var_definition}"
-                done < <(env_var_definitions "${EXPORT_VARS[@]}")
-            fi
-
-            if [[ "${#EXPORT_FUNCTIONS[@]}" -gt 0 ]]; then
-                echo "# Functions"
-                msg_debug "Exporting functions"
-
-                for fn in "${EXPORT_FUNCTIONS[@]}"; do
-                    declare -f "${fn}"
-                done
-            fi
-
-            echo "# ${PROG}"
-            msg_debug "Concatenating ${BASH_SOURCE[0]}"
-            cat "${BASH_SOURCE[0]}"
-
-            if [[ "${#LOAD_PATHS[@]}" -gt 0 ]]; then
-                while read -r file_path; do
-                    msg_debug "Concatenating ${file_path}"
-                    echo "# $(basename "${file_path}")"
-                    cat "${file_path}"
-                    newline
-                done < <(loadable_files "${LOAD_PATHS[@]}")
-            fi
-
-            if [[ "${#COPY_PAIRS[@]}" -gt 0 ]]; then
-                files_as_code < <(printf '%s\n' "${COPY_PAIRS[@]}")
-            fi
-
-            if [[ "${#DRAG_PAIRS[@]}" -gt 0 ]]; then
-                files_as_functions < <(printf '%s\n' "${DRAG_PAIRS[@]}")
-            fi
-
-            if is_true "${DEBUG}"; then
-                echo "DEBUG=TRUE"
-            fi
-            echo "AUTOMATED_OWNER_UID=${OWNER_UID_SOURCE}"
-            echo "TMUX_SOCK_PREFIX=${TMUX_SOCK_PREFIX}"
-
-            echo "# Facts"
-            echo "get_the_facts"
-
-            if [[ "${#MACROS[@]}" -gt 0 ]]; then
-                for macro in "${MACROS[@]}"; do
-                    eval "${macro}"
-                done
-            fi
-
-            echo "# Entry point"
-            echo "${command}"
-
-        } | cmd "${handler[@]}" || rc=$?
+        { cmd "${handler[@]}" || rc=$?; } < <(render_script "${command}")
 
         case "${rc}" in
             "${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}")
