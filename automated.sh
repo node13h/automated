@@ -211,7 +211,7 @@ EOF
 newline () { printf '\n'; }
 
 is_true () {
-    [[ "${1,,}" =~ yes|true|on|1 ]]
+    [[ "${1,,}" =~ ^(yes|true|on|1)$ ]]
 }
 
 to_stderr () {
