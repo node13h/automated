@@ -55,6 +55,23 @@ MACROS=()
 SUDO_UID_VARIABLE='AUTOMATED_SUDO_UID'
 OWNER_UID_SOURCE="\${${SUDO_UID_VARIABLE}:-\$(id -u)}"
 
+ANSI_FG_BLACK=30
+ANSI_FG_RED=31
+ANSI_FG_GREEN=32
+ANSI_FG_YELLOW=33
+ANSI_FG_BLUE=34
+ANSI_FG_MAGENTA=35
+ANSI_FG_CYAN=36
+ANSI_FG_WHITE=37
+
+ANSI_FG_BRIGHT_BLACK=90
+ANSI_FG_BRIGHT_RED=91
+ANSI_FG_BRIGHT_GREEN=92
+ANSI_FG_BRIGHT_YELLOW=93
+ANSI_FG_BRIGHT_BLUE=94
+ANSI_FG_BRIGHT_MAGENTA=95
+ANSI_FG_BRIGHT_CYAN=96
+ANSI_FG_BRIGHT_WHITE=97
 
 pty_helper_script () {
     cat <<"EOF"
@@ -191,7 +208,7 @@ sys.exit(exitstatus >> 8)
 EOF
 }
 
-newline () { echo; }
+newline () { printf '\n'; }
 
 is_true () {
     [[ "${1,,}" =~ yes|true|on|1 ]]
@@ -201,56 +218,110 @@ to_stderr () {
     >&2 cat
 }
 
-msg () {
-    echo "${*}" | to_stderr
+to_null () {
+    cat >/dev/null
 }
 
-colorize () {
-    local colour="${1}"
+printable_only () {
+  tr -cd '\11\12\15\40-\176'
+}
+
+translated () {
+    local str="${1}"
     shift
+    local a b
 
-    is_true "${DISABLE_COLOUR}" || echo -ne "\\e[${colour}m"
-    "${@}"
-    is_true "${DISABLE_COLOUR}" || echo -ne '\e[39m'
+    while [[ "${#}" -gt 1 ]]; do
+        a="${1}"
+        b="${2}"
+        str="${str//${a}/${b}}"
+
+        shift 2
+    done
+
+    printf '%s\n' "${str}"
 }
 
-to_debug () {
-    if is_true "${DEBUG}"; then
+sed_replacement () {
+    local str="${1}"
 
-        {
-            [[ -z "${1:-}" ]] || echo "BEGIN ${1}"
-            colorize 33 tr -cd '\11\12\15\40-\176'
-            [[ -z "${1:-}" ]] || echo "END ${1}"
+    # shellcheck disable=SC1003
+    printf '%s\n' "$(translated "${str}" '\' '\\' '/' '\/' '&' '\&' $'\n' '\n')"
+}
 
-        } | to_stderr
+colorized () {
+    local colour="${1}"
+    local -a processor
 
+    if is_true "${DISABLE_COLOUR}"; then
+        processor=(cat)
     else
-        # Consume, to keep file descriptor open
-        cat >/dev/null
+        processor=(sed -e 1s/^/$'\e'\["${colour}"m/ -e \$s/$/$'\e'\[0m/)
+    fi
+
+    "${processor[@]}"
+}
+
+text_block () {
+    local name="${1:-}"
+    local -a processor
+
+    if [[ -n "${name}" ]]; then
+        processor=(sed -e 1s/^/"$(sed_replacement "BEGIN ${name}")"\\n/ -e \$s/$/\\n"$(sed_replacement "END ${name}")"/)
+    else
+        processor=(cat)
+    fi
+
+    "${processor[@]}"
+}
+
+# shellcheck disable=SC2120
+to_debug () {
+    local colour="${1:-${ANSI_FG_YELLOW}}"
+
+    if is_true "${DEBUG}"; then
+        colorized "${colour}" | to_stderr
+    else
+        to_null
     fi
 }
 
+pipe_debug () {
+    tee >(to_debug)
+}
+
+msg () {
+    local msg="${1}"
+    local colour="${2:-${ANSI_FG_WHITE}}"
+
+    printf '%s\n' "${msg}" | colorized "${colour}" | to_stderr
+}
+
 msg_debug () {
-    echo "DEBUG ${*}" | to_debug
+    local msg="${1}"
+
+    printf 'DEBUG %s\n' "${msg}" | to_debug
 }
 
 throw () {
-    echo "${*}" | to_stderr
+    local msg="${1}"
+
+    printf '%s\n' "${msg}" | to_stderr
     return 1
 }
 
 to_file () {
-    tee "${1}" | to_debug "${1}"
+    tee "${1}" | printable_only | text_block "${1}" | to_debug "${ANSI_FG_BRIGHT_BLACK}"
 }
 
-quote () {
-    local result=""
+quoted () {
+    local -a result=()
 
     for token in "${@}"; do
-        result="${result:+${result} }$(printf "%q" "${token}")"
+        result+=("$(printf "%q" "${token}")")
     done
 
-    echo "${result}"
+    printf '%s\n' "${result[*]}"
 }
 
 md5 () {
@@ -258,10 +329,8 @@ md5 () {
 }
 
 cmd () {
-    # to_stderr or to_debug may swallow STDIN intended for the command - hence the simple printf
-    if is_true "${DEBUG}"; then
-        colorize 32 printf 'CMD %s\n' "$(quote "${@}")" >&2
-    fi
+    msg "CMD $(quoted "${@}")" "${ANSI_FG_GREEN}"
+
     "${@}"
 }
 
@@ -328,9 +397,9 @@ get_the_facts () {
         while read -r var_definition; do
             declare -g "${var_definition}"
         done < <(source /etc/os-release
-                 echo "FACT_OS_NAME=${NAME}"
-                 echo "FACT_OS_VERSION=${VERSION_ID}"
-                 echo "FACT_OS_RELEASE=${VERSION}")
+                 printf 'FACT_OS_NAME=%s\n' "${NAME}"
+                 printf 'FACT_OS_VERSION=%s\n' "${VERSION_ID}"
+                 printf 'FACT_OS_RELEASE=%s\n' "${VERSION}")
 
     else
         throw "Unsupported operating system"
@@ -396,7 +465,7 @@ service_ensure () {
 }
 
 tmux_command () {
-    tmux -S "${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}" "${@}"
+    cmd tmux -S "${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}" "${@}"
 }
 
 multiplexer_present () {
@@ -404,7 +473,7 @@ multiplexer_present () {
 
     for multiplexer in "${SUPPORTED_MULTIPLEXERS[@]}"; do
         if cmd_is_available "${multiplexer}"; then
-            echo "${multiplexer}"
+            printf '%s\n' "${multiplexer}"
             return 0
         fi
     done
@@ -433,9 +502,9 @@ run_in_multiplexer () {
                 exit "${EXIT_MULTIPLEXER_ALREADY_RUNNING}"
             else
                 msg_debug "Starting multiplexer and sending commands"
-                cmd tmux_command new-session -d
-                cmd tmux_command -l send "${@}"
-                cmd tmux_command send ENTER
+                tmux_command new-session -d
+                tmux_command -l send "${@}"
+                tmux_command send ENTER
             fi
 
             chown "${AUTOMATED_OWNER_UID}" "${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}"
@@ -478,14 +547,14 @@ ask_sudo_password () {
     else
         {
 
-            echo -n "SUDO password (${1:-localhost}): "
+            printf 'SUDO password (%s): ' "${1:-localhost}"
             read -r -s sudo_password
             newline
 
         } </dev/tty >/dev/tty
     fi
 
-    echo "${sudo_password}"
+    printf '%s\n' "${sudo_password}"
 }
 
 display_automated_usage_and_exit () {
@@ -571,11 +640,11 @@ loadable_files () {
 
     for load_path in "${@}"; do
         if readable_file "${load_path}"; then
-            echo "${load_path}"
+            printf '%s\n' "${load_path}"
         elif readable_directory "${load_path}"; then
             for file_path in "${load_path%/}/"*.sh; do
                 if readable_file "${file_path}"; then
-                    echo "${file_path}"
+                    printf '%s\n' "${file_path}"
                 fi
             done
         fi
@@ -589,7 +658,7 @@ env_var_definitions () {
 
     for var in "${@}"; do
         if [[ -n ${!var+set} ]]; then
-            echo "${var}=$(quote "${!var}")"
+            printf '%s=%s\n' "${var}" "$(quoted "${!var}")"
         fi
     done
 }
@@ -597,6 +666,7 @@ env_var_definitions () {
 target_as_ssh_arguments () {
     local target="${1}"
     local username address port
+    local -a args=()
 
     if [[ "${target}" =~ ^((.+)@)?(\[([:0-9A-Fa-f]+)\])(:([0-9]+))?$ ]] ||
        [[ "${target}" =~ ^((.+)@)?(([-.0-9A-Za-z]+))(:([0-9]+))?$ ]]; then
@@ -606,7 +676,18 @@ target_as_ssh_arguments () {
     else
         return 1
     fi
-    echo "${port:+-p ${port} }${username:+-l ${username} }${address}"
+
+    if [[ -n "${port}" ]]; then
+        args+=(-p "${port}")
+    fi
+
+    if [[ -n "${username}" ]]; then
+        args+=(-l "${username}")
+    fi
+
+    args+=("${address}")
+
+    printf '%s\n' "${args[*]}"
 }
 
 in_proper_context () {
@@ -624,11 +705,18 @@ in_proper_context () {
 
     cmdline+=("${command}")
 
-    echo "${cmdline[@]}"
+    printf '%s\n' "${cmdline[*]}"
 }
 
 pty_helper_settings () {
-    echo "SUDO_UID_VARIABLE=\"${SUDO_UID_VARIABLE}\" EXIT_TIMEOUT=\"${EXIT_TIMEOUT}\" EXIT_SUDO_PASSWORD_NOT_ACCEPTED=\"${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}\" EXIT_SUDO_PASSWORD_REQUIRED=\"${EXIT_SUDO_PASSWORD_REQUIRED}\""
+    local var
+    local -a result=()
+
+    for var in SUDO_UID_VARIABLE EXIT_TIMEOUT EXIT_SUDO_PASSWORD_NOT_ACCEPTED EXIT_SUDO_PASSWORD_REQUIRED; do
+        result+=("${var}=$(quoted "${!var}")")
+    done
+
+    printf '%s\n' "${result[*]}"
 }
 
 file_as_code () {
@@ -644,9 +732,9 @@ file_as_code () {
     boundary="EOF-$(md5 <<< "${dst}")"
 
     cat <<EOF
-touch $(quote "${dst}")
-chmod ${mode} $(quote "${dst}")
-base64 -d <<"${boundary}" | gzip -d >$(quote "${dst}")
+touch $(quoted "${dst}")
+chmod ${mode} $(quoted "${dst}")
+base64 -d <<"${boundary}" | gzip -d >$(quoted "${dst}")
 EOF
 
     gzip -c "${src}" | base64
@@ -675,7 +763,7 @@ files_as_code () {
 drop_fn_name () {
     local file_id="${1}"
 
-    printf '%s\n' "drop_$(md5 <<< "${file_id}")"
+    printf 'drop_%s\n' "$(md5 <<< "${file_id}")"
 }
 
 
@@ -739,23 +827,23 @@ render_script () {
     # sudo password has to go first!
     if is_true "${SUDO}"; then
         if is_true "${DUMP_SCRIPT}"; then
-            echo '*** SUDO PASSWORD IS HIDDEN IN SCRIPT DUMP MODE ***'
+            printf '%s\n' '*** SUDO PASSWORD IS HIDDEN IN SCRIPT DUMP MODE ***'
         else
-            echo "${sudo_password}"  # This one will be consumed by the PTY helper
+            printf '%s\n' "${sudo_password}"  # This one will be consumed by the PTY helper
         fi
     fi
 
     if [[ "${#EXPORT_VARS[@]}" -gt 0 ]]; then
-        echo "# Vars"
+        printf '%s\n' "# Vars"
         msg_debug "Exporting variables"
         while read -r var_definition; do
             msg_debug "${var_definition}"
-            echo "${var_definition}"
+            printf '%s\n' "${var_definition}"
         done < <(env_var_definitions "${EXPORT_VARS[@]}")
     fi
 
     if [[ "${#EXPORT_FUNCTIONS[@]}" -gt 0 ]]; then
-        echo "# Functions"
+        printf '%s\n' "# Functions"
         msg_debug "Exporting functions"
 
         for fn in "${EXPORT_FUNCTIONS[@]}"; do
@@ -763,14 +851,14 @@ render_script () {
         done
     fi
 
-    echo "# ${PROG}"
+    printf '%s\n' "# ${PROG}"
     msg_debug "Concatenating ${BASH_SOURCE[0]}"
     cat "${BASH_SOURCE[0]}"
 
     if [[ "${#LOAD_PATHS[@]}" -gt 0 ]]; then
         while read -r file_path; do
             msg_debug "Concatenating ${file_path}"
-            echo "# $(basename "${file_path}")"
+            printf '# %s\n' "$(basename "${file_path}")"
             cat "${file_path}"
             newline
         done < <(loadable_files "${LOAD_PATHS[@]}")
@@ -785,13 +873,13 @@ render_script () {
     fi
 
     if is_true "${DEBUG}"; then
-        echo "DEBUG=TRUE"
+        printf '%s=%s\n' "DEBUG" "TRUE"
     fi
-    echo "AUTOMATED_OWNER_UID=${OWNER_UID_SOURCE}"
-    echo "TMUX_SOCK_PREFIX=${TMUX_SOCK_PREFIX}"
+    printf 'AUTOMATED_OWNER_UID=%s\n' "${OWNER_UID_SOURCE}"
+    printf 'TMUX_SOCK_PREFIX=%s\n' "${TMUX_SOCK_PREFIX}"
 
-    echo "# Facts"
-    echo "get_the_facts"
+    printf '%s\n' "# Facts"
+    printf '%s\n' "get_the_facts"
 
     if [[ "${#MACROS[@]}" -gt 0 ]]; then
         for macro in "${MACROS[@]}"; do
@@ -799,8 +887,8 @@ render_script () {
         done
     fi
 
-    echo "# Entry point"
-    echo "${command}"
+    printf '%s\n' "# Entry point"
+    printf '%s\n' "${command}"
 
 }
 
