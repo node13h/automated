@@ -373,6 +373,22 @@ file_mode () {
     esac
 }
 
+file_mtime () {
+    local path="${1}"
+
+    case "${LOCAL_KERNEL}" in
+        FreeBSD|OpenBSD|Darwin)
+            stat -f '%Um' "${path}"
+            ;;
+        Linux)
+            stat -c "%Y" "${path}"
+            ;;
+        *)
+            python -c "import sys, os, stat; print os.stat(sys.argv[1])[stat.ST_MTIME]" "${path}"
+            ;;
+    esac
+}
+
 get_the_facts () {
     local pkg ver
 
