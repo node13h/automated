@@ -312,7 +312,8 @@ throw () {
 
 to_file () {
     local target_path="${1}"
-    local restore_pipefail
+    local callback="${2:-}"
+    local restore_pipefail mtime_before mtime_after
 
     # diff will return non-zero exit code if file differs, therefore
     # pipefail shell attribute should be disabled for this
@@ -320,7 +321,15 @@ to_file () {
     restore_pipefail=$(shopt -p -o pipefail)
     set +o pipefail
 
+    mtime_before=$(file_mtime "${target_path}" 2>/dev/null) || mtime_before=0
+
     diff -duaN "${target_path}" - | tee >(printable_only | text_block "${1}" | to_debug "${ANSI_FG_BRIGHT_BLACK}") | patch --binary -s -p0 "$target_path"
+
+    mtime_after=$(file_mtime "${target_path}")
+
+    if [[ -n "${callback}" ]] && [[ "${mtime_before}" -ne "${mtime_after}" ]]; then
+        "${callback}" "${target_path}"
+    fi
 
     eval "${restore_pipefail}"
 }
