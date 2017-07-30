@@ -311,7 +311,7 @@ throw () {
 }
 
 to_file () {
-    local target_path="$1"
+    local target_path="${1}"
     local restore_pipefail
 
     # diff will return non-zero exit code if file differs, therefore
@@ -320,9 +320,9 @@ to_file () {
     restore_pipefail=$(shopt -p -o pipefail)
     set +o pipefail
 
-    diff -duaN "$target_path" - | tee >(printable_only | text_block "${1}" | to_debug "${ANSI_FG_BRIGHT_BLACK}") | patch --binary -s -p0 "$target_path"
+    diff -duaN "${target_path}" - | tee >(printable_only | text_block "${1}" | to_debug "${ANSI_FG_BRIGHT_BLACK}") | patch --binary -s -p0 "$target_path"
 
-    eval "$restore_pipefail"
+    eval "${restore_pipefail}"
 }
 
 quoted () {
