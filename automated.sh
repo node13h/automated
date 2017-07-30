@@ -1156,5 +1156,11 @@ main () {
 
 
 if [[ -n "${BASH_SOURCE[0]:-}" && "${0}" = "${BASH_SOURCE[0]}" ]]; then
+
+    source automated-config.sh
+
+    source "${LIBDIR%/}/libautomated.sh"
+
     main "${@}"
+
 fi
