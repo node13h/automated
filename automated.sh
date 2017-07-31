@@ -27,6 +27,9 @@ source "${LIBDIR%/}/libautomated.sh"
 
 PROG=$(basename "${BASH_SOURCE:-}")
 
+STDLIBDIR="${LIBDIR%/}/stdlib"
+FACTDIR="${LIBDIR%/}/facts"
+
 LOCAL=FALSE
 AUTO_ATTACH=TRUE
 IGNORE_FAILED=FALSE
@@ -173,11 +176,11 @@ EOF
     fi
 
     if is_true "${AUTOLOAD_FACTS}"; then
-        paths+=("${LIBDIR}/facts")
+        paths+=("${FACTDIR}")
     fi
 
     if is_true "${AUTOLOAD_STDLIB}"; then
-        paths+=("${LIBDIR}/stdlib")
+        paths+=("${STDLIBDIR}")
     fi
 
     if [[ "${#LOAD_PATHS[@]}" -gt 0 ]]; then
