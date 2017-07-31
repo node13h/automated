@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 
-# An automation tool
-# Copyright (C) 2016 Sergej Alikov <sergej.alikov@gmail.com>
+# Copyright (C) 2016-2017 Sergej Alikov <sergej.alikov@gmail.com>
 
-# This program is free software: you can redistribute it and/or modify
+# This file is part of Automated.
+
+# Automated is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
@@ -16,35 +17,30 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-set -eu
-set -o pipefail
+set -euo pipefail
+
+# shellcheck disable=SC1091
+source automated-config.sh
+# shellcheck disable=SC1090
+source "${LIBDIR%/}/libautomated.sh"
 
 # TODO Throw error on unsupported systems (CentOS5, perhaps Ubuntu 10.04)
 
 PROG=$(basename "${BASH_SOURCE:-}")
-LOCAL_KERNEL=$(uname -s)
 
-DEBUG=FALSE
-DISABLE_COLOUR=FALSE
-SUDO=FALSE
-SUDO_PASSWORDLESS=FALSE
-SUDO_PASSWORD_ON_STDIN=FALSE
+STDLIBDIR="${LIBDIR%/}/stdlib"
+FACTDIR="${LIBDIR%/}/facts"
+
 LOCAL=FALSE
 AUTO_ATTACH=TRUE
 IGNORE_FAILED=FALSE
 DUMP_SCRIPT=FALSE
+AUTOLOAD_STDLIB=TRUE
+AUTOLOAD_FACTS=TRUE
+
+# TODO Change to main
 CMD='all'
 
-EXIT_TIMEOUT=65
-EXIT_SUDO_PASSWORD_NOT_ACCEPTED=66
-EXIT_SUDO_PASSWORD_REQUIRED=67
-EXIT_RUNNING_IN_TMUX=68
-# TODO EXIT_RUNNING_IN_SCREEN=69
-EXIT_MULTIPLEXER_ALREADY_RUNNING=70
-
-SUPPORTED_MULTIPLEXERS=(tmux)
-
-TMUX_SOCK_PREFIX="/tmp/tmux-automated"
 EXPORT_VARS=()
 EXPORT_FUNCTIONS=()
 LOAD_PATHS=()
@@ -52,548 +48,8 @@ COPY_PAIRS=()
 DRAG_PAIRS=()
 MACROS=()
 
-SUDO_UID_VARIABLE='AUTOMATED_SUDO_UID'
-OWNER_UID_SOURCE="\${${SUDO_UID_VARIABLE}:-\$(id -u)}"
 
-ANSI_FG_BLACK=30
-ANSI_FG_RED=31
-ANSI_FG_GREEN=32
-ANSI_FG_YELLOW=33
-ANSI_FG_BLUE=34
-ANSI_FG_MAGENTA=35
-ANSI_FG_CYAN=36
-ANSI_FG_WHITE=37
-
-ANSI_FG_BRIGHT_BLACK=90
-ANSI_FG_BRIGHT_RED=91
-ANSI_FG_BRIGHT_GREEN=92
-ANSI_FG_BRIGHT_YELLOW=93
-ANSI_FG_BRIGHT_BLUE=94
-ANSI_FG_BRIGHT_MAGENTA=95
-ANSI_FG_BRIGHT_CYAN=96
-ANSI_FG_BRIGHT_WHITE=97
-
-pty_helper_script () {
-    cat <<"EOF"
-import os
-import sys
-import pty
-import select
-import termios
-import time
-import argparse
-
-parser = argparse.ArgumentParser(description='SUDO PTY helper')
-parser.add_argument('--sudo-passwordless', action='store_true', default=False)
-parser.add_argument('command')
-
-args = parser.parse_args()
-
-DEFAULT_TIMEOUT = 60
-DEFAULT_READ_BUFFER_SIZE = 1024
-
-STDIN = sys.stdin.fileno()
-STDOUT = sys.stdout.fileno()
-STDERR = sys.stderr.fileno()
-
-EXIT_TIMEOUT = int(os.environ['EXIT_TIMEOUT'])
-EXIT_SUDO_PASSWORD_NOT_ACCEPTED = int(os.environ['EXIT_SUDO_PASSWORD_NOT_ACCEPTED'])
-EXIT_SUDO_PASSWORD_REQUIRED = int(os.environ['EXIT_SUDO_PASSWORD_REQUIRED'])
-
-class Timeout(Exception):
-    pass
-
-
-def one_of(
-        fd, string_list, timeout=DEFAULT_TIMEOUT,
-        read_buffer_size=DEFAULT_READ_BUFFER_SIZE):
-
-    buffer = ''
-    longest_string_len = max([len(s) for s in string_list])
-
-    start = time.time()
-
-    while True:
-
-        # We might hit the EOF multiple times
-
-        try:
-            chunk = os.read(fd, read_buffer_size)
-        except OSError:
-            continue
-
-        if not chunk:
-            continue
-
-        buffer = ''.join([buffer, chunk])
-
-        for s in string_list:
-            if s in buffer:
-                return s
-
-        buffer = buffer[-longest_string_len:]
-
-        if timeout is not None:
-            if time.time() - start >= timeout:
-                raise Timeout()
-
-
-# Save standard file descriptors for later
-fd0 = os.dup(STDIN)
-fd1 = os.dup(STDOUT)
-fd2 = os.dup(STDERR)
-
-# Closing these will prevent Python script itself
-# from being able to output stuff onto STDOUT/STDERR
-os.close(STDIN)
-os.close(STDOUT)
-os.close(STDERR)
-
-sudo_pass_buffer = []
-
-while True:
-    c = os.read(fd0, 1)
-
-    sudo_pass_buffer.append(c)
-
-    if c == '\n':
-        break
-
-sudo_pass = ''.join(sudo_pass_buffer)
-
-pid, child_pty = pty.fork()
-
-if pid is 0:
-    # Attach child to saved standard descriptors
-    os.dup2(fd0, STDIN)
-    os.dup2(fd1, STDOUT)
-    os.dup2(fd2, STDERR)
-    os.close(fd0)
-    os.close(fd1)
-    os.close(fd2)
-
-    os.execv('/usr/bin/sudo', [
-        'sudo', '-p', 'SUDO_PASSWORD_PROMPT:',
-        'bash', '-c', (
-            'echo "SUDO_SUCCESS" >/dev/tty; '
-            'export PTY_HELPER_SCRIPT={}; '
-            'export {}={}; '
-            'exec {}').format(__file__,
-                              os.environ['SUDO_UID_VARIABLE'], os.getuid(),
-                              args.command)])
-
-# Disable echo
-attr = termios.tcgetattr(child_pty)
-attr[3] = attr[3] & ~termios.ECHO
-termios.tcsetattr(child_pty, termios.TCSANOW, attr)
-
-try:
-    s = one_of(child_pty, ['SUDO_PASSWORD_PROMPT:', 'SUDO_SUCCESS'])
-    if s == 'SUDO_PASSWORD_PROMPT:':
-
-        if args.sudo_passwordless:
-            sys.exit(EXIT_SUDO_PASSWORD_REQUIRED)
-
-        os.write(child_pty, sudo_pass)
-
-        s = one_of(child_pty, ['SUDO_PASSWORD_PROMPT:', 'SUDO_SUCCESS'])
-        if s == 'SUDO_PASSWORD_PROMPT:':
-            sys.exit(EXIT_SUDO_PASSWORD_NOT_ACCEPTED)
-except Timeout:
-    sys.exit(EXIT_TIMEOUT)
-
-pid, exitstatus = os.waitpid(pid, 0)
-
-sys.exit(exitstatus >> 8)
-EOF
-}
-
-newline () { printf '\n'; }
-
-is_true () {
-    [[ "${1,,}" =~ ^(yes|true|on|1)$ ]]
-}
-
-to_stderr () {
-    >&2 cat
-}
-
-to_null () {
-    cat >/dev/null
-}
-
-printable_only () {
-  tr -cd '\11\12\15\40-\176'
-}
-
-translated () {
-    local str="${1}"
-    shift
-    local a b
-
-    while [[ "${#}" -gt 1 ]]; do
-        a="${1}"
-        b="${2}"
-        str="${str//${a}/${b}}"
-
-        shift 2
-    done
-
-    printf '%s\n' "${str}"
-}
-
-sed_replacement () {
-    local str="${1}"
-
-    # shellcheck disable=SC1003
-    printf '%s\n' "$(translated "${str}" '\' '\\' '/' '\/' '&' '\&' $'\n' '\n')"
-}
-
-colorized () {
-    local colour="${1}"
-    local -a processor
-
-    if is_true "${DISABLE_COLOUR}"; then
-        processor=(cat)
-    else
-        processor=(sed -e 1s/^/$'\e'\["${colour}"m/ -e \$s/$/$'\e'\[0m/)
-    fi
-
-    "${processor[@]}"
-}
-
-text_block () {
-    local name="${1:-}"
-    local -a processor
-
-    if [[ -n "${name}" ]]; then
-        processor=(sed -e 1s/^/"$(sed_replacement "BEGIN ${name}")"\\n/ -e \$s/$/\\n"$(sed_replacement "END ${name}")"/)
-    else
-        processor=(cat)
-    fi
-
-    "${processor[@]}"
-}
-
-# shellcheck disable=SC2120
-to_debug () {
-    local colour="${1:-${ANSI_FG_YELLOW}}"
-
-    if is_true "${DEBUG}"; then
-        colorized "${colour}" | to_stderr
-    else
-        to_null
-    fi
-}
-
-pipe_debug () {
-    tee >(to_debug)
-}
-
-msg () {
-    local msg="${1}"
-    local colour="${2:-${ANSI_FG_WHITE}}"
-
-    printf '%s\n' "${msg}" | colorized "${colour}" | to_stderr
-}
-
-msg_debug () {
-    local msg="${1}"
-
-    printf 'DEBUG %s\n' "${msg}" | to_debug
-}
-
-throw () {
-    local msg="${1}"
-
-    printf '%s\n' "${msg}" | to_stderr
-    return 1
-}
-
-to_file () {
-    local target_path="${1}"
-    local callback="${2:-}"
-    local restore_pipefail mtime_before mtime_after
-
-    # diff will return non-zero exit code if file differs, therefore
-    # pipefail shell attribute should be disabled for this
-    # special case
-    restore_pipefail=$(shopt -p -o pipefail)
-    set +o pipefail
-
-    mtime_before=$(file_mtime "${target_path}" 2>/dev/null) || mtime_before=0
-
-    diff -duaN "${target_path}" - | tee >(printable_only | text_block "${1}" | to_debug "${ANSI_FG_BRIGHT_BLACK}") | patch --binary -s -p0 "$target_path"
-
-    mtime_after=$(file_mtime "${target_path}")
-
-    if [[ -n "${callback}" ]] && [[ "${mtime_before}" -ne "${mtime_after}" ]]; then
-        "${callback}" "${target_path}"
-    fi
-
-    eval "${restore_pipefail}"
-}
-
-quoted () {
-    local -a result=()
-
-    for token in "${@}"; do
-        result+=("$(printf "%q" "${token}")")
-    done
-
-    printf '%s\n' "${result[*]}"
-}
-
-md5 () {
-    md5sum -b | cut -f 1 -d ' '
-}
-
-cmd () {
-    printf 'CMD %s\n' "$(quoted "${@}")" | to_debug "${ANSI_FG_GREEN}"
-
-    "${@}"
-}
-
-cmd_is_available () {
-    which "${1}" >/dev/null 2>&1
-}
-
-readable_file () {
-    [[ -f "${1}" && -r "${1}" ]]
-}
-
-readable_directory () {
-    [[ -d "${1}" && -r "${1}" ]]
-}
-
-file_mode () {
-    local path="${1}"
-
-    case "${LOCAL_KERNEL}" in
-        FreeBSD|OpenBSD|Darwin)
-            stat -f '%#Mp%03Lp' "${path}"
-            ;;
-        Linux)
-            stat -c "%#03a" "${path}"
-            ;;
-        *)
-            python -c "import sys, os, stat; print oct(stat.S_IMODE(os.stat(sys.argv[1]).st_mode))" "${path}"
-            ;;
-    esac
-}
-
-file_mtime () {
-    local path="${1}"
-
-    case "${LOCAL_KERNEL}" in
-        FreeBSD|OpenBSD|Darwin)
-            stat -f '%Um' "${path}"
-            ;;
-        Linux)
-            stat -c "%Y" "${path}"
-            ;;
-        *)
-            python -c "import sys, os, stat; print os.stat(sys.argv[1])[stat.ST_MTIME]" "${path}"
-            ;;
-    esac
-}
-
-get_the_facts () {
-    local pkg ver
-
-    FACT_SYSTEMD=FALSE
-
-    if cmd_is_available systemctl; then
-        if systemctl --quiet is-active -- '-.mount'; then
-            FACT_SYSTEMD=TRUE
-        fi
-    fi
-
-    # shellcheck disable=SC1091,SC2034
-    if [[ -f /etc/redhat-release ]]; then
-        FACT_OS_FAMILY='RedHat'
-        for pkg in 'centos-release' 'redhat-release' 'fedora-release'; do
-            if ver=$(rpm -q --queryformat '%{VERSION} %{RELEASE}' "${pkg}"); then
-                read -r FACT_OS_VERSION FACT_OS_RELEASE <<< "${ver}"
-                case "${pkg}" in
-                    'centos-release')
-                        FACT_OS_NAME='CentOS'
-                        ;;
-                    'redhat-release')
-                        FACT_OS_NAME='RHEL'
-                        ;;
-                    'fedora-release')
-                        FACT_OS_NAME='Fedora'
-                        ;;
-                esac
-            fi
-        done
-    elif [[ -f /etc/debian_version ]]; then
-        FACT_OS_FAMILY='Debian'
-        while read -r var_definition; do
-            declare -g "${var_definition}"
-        done < <(source /etc/os-release
-                 printf 'FACT_OS_NAME=%s\n' "${NAME}"
-                 printf 'FACT_OS_VERSION=%s\n' "${VERSION_ID}"
-                 printf 'FACT_OS_RELEASE=%s\n' "${VERSION}")
-
-    else
-        throw "Unsupported operating system"
-    fi
-}
-
-packages_ensure () {
-    local command="${1}"
-    shift
-
-    case "${FACT_OS_FAMILY}-${command}" in
-        'RedHat-present')
-            yum -y -q install "${@}"
-            ;;
-        'RedHat-absent')
-            yum -y -q remove "${@}"
-            ;;
-        'Debian-present')
-            apt-get -yqq install "${@}"
-            ;;
-        'Debian-absent')
-            apt-get -yqq remove "${@}"
-            ;;
-        *)
-            throw "Command ${command} is unsupported on ${FACT_OS_FAMILY}"
-            ;;
-    esac
-}
-
-
-service_ensure () {
-    local service="${1}"
-    local command="${2}"
-
-    if is_true "${FACT_SYSTEMD}"; then
-        case "${command}" in
-            enabled)
-                systemctl enable "${service}"
-                ;;
-            disabled)
-                systemctl disable "${service}"
-                ;;
-        esac
-    else
-        case "${FACT_OS_FAMILY}-${command}" in
-            'RedHat-enabled')
-                chkconfig "${service}" on
-                ;;
-            'RedHat-disabled')
-                chkconfig "${service}" off
-                ;;
-            'Debian-enabled')
-                update-rc.d "${service}" enable
-                ;;
-            'Debian-disabled')
-                update-rc.d "${service}" disable
-                ;;
-            *)
-                throw "Command ${command} is unsupported on ${FACT_OS_FAMILY}"
-                ;;
-        esac
-    fi
-}
-
-tmux_command () {
-    cmd tmux -S "${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}" "${@}"
-}
-
-multiplexer_present () {
-    local multiplexer
-
-    for multiplexer in "${SUPPORTED_MULTIPLEXERS[@]}"; do
-        if cmd_is_available "${multiplexer}"; then
-            printf '%s\n' "${multiplexer}"
-            return 0
-        fi
-    done
-
-    return 1
-}
-
-multiplexer_ensure_installed () {
-    if ! multiplexer_present >/dev/null; then
-        packages_ensure installed "${SUPPORTED_MULTIPLEXERS[0]}"  # Install first one
-    fi
-}
-
-run_in_multiplexer () {
-
-    local multiplexer
-
-    if ! multiplexer=$(multiplexer_present); then
-        throw "Multiplexer is not available. Please install one of the following: ${SUPPORTED_MULTIPLEXERS[*]}"
-    fi
-
-    case "${multiplexer}" in
-        tmux)
-            if tmux_command ls 2>/dev/null | to_debug; then
-                msg_debug "Multiplexer is already running"
-                exit "${EXIT_MULTIPLEXER_ALREADY_RUNNING}"
-            else
-                msg_debug "Starting multiplexer and sending commands"
-                tmux_command new-session -d
-                tmux_command -l send "${@}"
-                tmux_command send ENTER
-            fi
-
-            chown "${AUTOMATED_OWNER_UID}" "${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}"
-
-            exit "${EXIT_RUNNING_IN_TMUX}"
-            ;;
-
-        # TODO screen
-    esac
-}
-
-
-# This command is usually run on the controlling workstation, not remote
-attach_to_multiplexer () {
-    local multiplexer="${1}"
-    local target="${2:-LOCAL HOST}"
-
-    local handler
-
-    if is_true "${LOCAL}"; then
-        handler=(eval)
-    else
-        handler=(ssh -t -q $(target_as_ssh_arguments "${target}") --)
-    fi
-
-    case "${multiplexer}" in
-        tmux)
-            cmd "${handler[@]}" "tmux -S \"${TMUX_SOCK_PREFIX}-${OWNER_UID_SOURCE}\" attach"
-            ;;
-
-        # TODO screen
-    esac
-}
-
-ask_sudo_password () {
-    local sudo_password
-
-    if is_true "${SUDO_PASSWORD_ON_STDIN}"; then
-        read -r sudo_password
-    else
-        {
-
-            printf 'SUDO password (%s): ' "${1:-localhost}"
-            read -r -s sudo_password
-            newline
-
-        } </dev/tty >/dev/tty
-    fi
-
-    printf '%s\n' "${sudo_password}"
-}
-
-display_automated_usage_and_exit () {
+usage () {
     cat <<EOF
 Usage: ${PROG} [OPTIONS] [[<[USER@]ADDRESS[:PORT]>] ...]
 
@@ -664,201 +120,17 @@ OPTIONS:
   --tmux-sock-prefix PATH     Use custom PATH prefix for tmux socket on the
                               target.
                               Default: ${TMUX_SOCK_PREFIX}
+  --no-autoload-stdlib        Disable autoloading of the ${STDLIBDIR%/}/*.sh
+  --no-autoload-facts         Disable autoloading of the ${FACTDIR%/}/*.sh
 
 EOF
-    exit "${1:-0}"
 }
 
-loadable_files () {
-    local file_path load_path
-
-    [[ "${#}" -gt 0 ]] || return 0
-
-    for load_path in "${@}"; do
-        if readable_file "${load_path}"; then
-            printf '%s\n' "${load_path}"
-        elif readable_directory "${load_path}"; then
-            for file_path in "${load_path%/}/"*.sh; do
-                if readable_file "${file_path}"; then
-                    printf '%s\n' "${file_path}"
-                fi
-            done
-        fi
-    done
-}
-
-env_var_definitions () {
-    local var
-
-    [[ "${#}" -gt 0 ]] || return 0
-
-    for var in "${@}"; do
-        if [[ -n ${!var+set} ]]; then
-            printf '%s=%s\n' "${var}" "$(quoted "${!var}")"
-        fi
-    done
-}
-
-target_as_ssh_arguments () {
-    local target="${1}"
-    local username address port
-    local -a args=()
-
-    if [[ "${target}" =~ ^((.+)@)?(\[([:0-9A-Fa-f]+)\])(:([0-9]+))?$ ]] ||
-       [[ "${target}" =~ ^((.+)@)?(([-.0-9A-Za-z]+))(:([0-9]+))?$ ]]; then
-        username="${BASH_REMATCH[2]}"
-        address="${BASH_REMATCH[4]}"
-        port="${BASH_REMATCH[6]}"
-    else
-        return 1
-    fi
-
-    if [[ -n "${port}" ]]; then
-        args+=(-p "${port}")
-    fi
-
-    if [[ -n "${username}" ]]; then
-        args+=(-l "${username}")
-    fi
-
-    args+=("${address}")
-
-    printf '%s\n' "${args[*]}"
-}
-
-in_proper_context () {
-    local command="${1}"
-    local force_sudo_password="${2:-FALSE}"
-    local cmdline=()
-
-    if is_true "${SUDO}"; then
-        cmdline+=("$(pty_helper_settings) python <(base64 -d <<< $(pty_helper_script | gzip | base64 -w 0) | gunzip)")
-
-        if ! is_true "${force_sudo_password}" && is_true "${SUDO_PASSWORDLESS}"; then
-            cmdline+=("--sudo-passwordless")
-        fi
-    fi
-
-    cmdline+=("${command}")
-
-    printf '%s\n' "${cmdline[*]}"
-}
-
-pty_helper_settings () {
-    local var
-    local -a result=()
-
-    for var in SUDO_UID_VARIABLE EXIT_TIMEOUT EXIT_SUDO_PASSWORD_NOT_ACCEPTED EXIT_SUDO_PASSWORD_REQUIRED; do
-        result+=("${var}=$(quoted "${!var}")")
-    done
-
-    printf '%s\n' "${result[*]}"
-}
-
-file_as_code () {
-    local src="${1}"
-    local dst="${2}"
-    local mode boundary
-
-    ! [[ -d "${src}" ]] || throw "${src} is a directory. Directories are not supported"
-
-    mode=$(file_mode "${src}")
-    # Not copying owner information intentionally
-
-    boundary="EOF-$(md5 <<< "${dst}")"
-
-    cat <<EOF
-touch $(quoted "${dst}")
-chmod ${mode} $(quoted "${dst}")
-base64 -d <<"${boundary}" | gzip -d >$(quoted "${dst}")
-EOF
-
-    gzip -c "${src}" | base64
-
-    cat <<EOF
-${boundary}
-EOF
-}
-
-files_as_code () {
-    local src dst
-    local eof=false
-
-    until ${eof}; do
-
-        # shellcheck disable=SC2162
-        read src dst || eof=true
-
-        [[ -n "${src}" && -n "${dst}" ]] || continue
-
-        file_as_code "${src}" "${dst}"
-
-    done
-}
-
-drop_fn_name () {
-    local file_id="${1}"
-
-    printf 'drop_%s\n' "$(md5 <<< "${file_id}")"
-}
-
-
-drop () {
-    local file_id="${1}"
-    local dst="${2}"
-
-    # shellcheck disable=SC2091
-    "$(drop_fn_name "${file_id}")" "${dst}"
-}
-
-file_as_function () {
-    local src="${1}"
-    local file_id="${2}"
-    local mode boundary fn_name
-
-    ! [[ -d "${src}" ]] || throw "${src} is a directory. Directories are not supported"
-
-    mode=$(file_mode "${src}")
-    # Not copying owner information intentionally
-
-    boundary="EOF-$(md5 <<< "${file_id}")"
-    fn_name=$(drop_fn_name "${file_id}")
-
-    cat <<EOF
-${fn_name} () {
-  local dst="\${1}"
-
-  touch "\${dst}"
-  chmod ${mode} "\${dst}"
-  base64 -d <<"${boundary}" | gzip -d >"\${dst}"
-EOF
-
-    gzip -c "${src}" | base64
-
-    cat <<EOF
-${boundary}
-}
-EOF
-}
-
-files_as_functions () {
-    local src file_id
-    local eof=false
-
-    until ${eof}; do
-        # shellcheck disable=SC2162
-        read src file_id || eof=true
-
-        [[ -n "${src}" && -n "${file_id}" ]] || continue
-
-        file_as_function "${src}" "${file_id}"
-    done
-}
-
-render_script () {
+rendered_script () {
     local command="${1}"
 
-    local file_path var_definition macro
+    local path macro var fn pair
+    local -a paths=()
 
     # sudo password has to go first!
     if is_true "${SUDO}"; then
@@ -869,53 +141,60 @@ render_script () {
         fi
     fi
 
-    if [[ "${#EXPORT_VARS[@]}" -gt 0 ]]; then
-        printf '%s\n' "# Vars"
-        msg_debug "Exporting variables"
-        while read -r var_definition; do
-            msg_debug "${var_definition}"
-            printf '%s\n' "${var_definition}"
-        done < <(env_var_definitions "${EXPORT_VARS[@]}")
-    fi
+    cat <<"EOF"
+#!/usr/bin/env bash
 
-    if [[ "${#EXPORT_FUNCTIONS[@]}" -gt 0 ]]; then
-        printf '%s\n' "# Functions"
-        msg_debug "Exporting functions"
+set -euo pipefail
+EOF
+    rendered_file "${LIBDIR%/}/libautomated.sh"
 
-        for fn in "${EXPORT_FUNCTIONS[@]}"; do
-            declare -f "${fn}"
-        done
-    fi
-
-    printf '%s\n' "# ${PROG}"
-    msg_debug "Concatenating ${BASH_SOURCE[0]}"
-    cat "${BASH_SOURCE[0]}"
-
-    if [[ "${#LOAD_PATHS[@]}" -gt 0 ]]; then
-        while read -r file_path; do
-            msg_debug "Concatenating ${file_path}"
-            printf '# %s\n' "$(basename "${file_path}")"
-            cat "${file_path}"
-            newline
-        done < <(loadable_files "${LOAD_PATHS[@]}")
-    fi
-
-    if [[ "${#COPY_PAIRS[@]}" -gt 0 ]]; then
-        files_as_code < <(printf '%s\n' "${COPY_PAIRS[@]}")
-    fi
-
-    if [[ "${#DRAG_PAIRS[@]}" -gt 0 ]]; then
-        files_as_functions < <(printf '%s\n' "${DRAG_PAIRS[@]}")
-    fi
-
-    if is_true "${DEBUG}"; then
-        printf '%s=%s\n' "DEBUG" "TRUE"
-    fi
+    printf 'DEBUG=%s\n' "${DEBUG}"
     printf 'AUTOMATED_OWNER_UID=%s\n' "${OWNER_UID_SOURCE}"
     printf 'TMUX_SOCK_PREFIX=%s\n' "${TMUX_SOCK_PREFIX}"
 
-    printf '%s\n' "# Facts"
-    printf '%s\n' "get_the_facts"
+    if [[ "${#EXPORT_VARS[@]}" -gt 0 ]]; then
+        for var in "${EXPORT_VARS[@]}"; do
+            rendered_var "${var}"
+        done
+    fi
+
+    if [[ "${#EXPORT_FUNCTIONS[@]}" -gt 0 ]]; then
+        for fn in "${EXPORT_FUNCTIONS[@]}"; do
+            rendered_function "${fn}"
+        done
+    fi
+
+    if [[ "${#COPY_PAIRS[@]}" -gt 0 ]]; then
+        for pair in "${COPY_PAIRS[@]}"; do
+            # shellcheck disable=SC2086
+            file_as_code ${pair}
+        done
+    fi
+
+    if [[ "${#DRAG_PAIRS[@]}" -gt 0 ]]; then
+        for pair in "${DRAG_PAIRS[@]}"; do
+            # shellcheck disable=SC2086
+            file_as_function ${pair}
+        done
+    fi
+
+    if is_true "${AUTOLOAD_FACTS}"; then
+        paths+=("${FACTDIR}")
+    fi
+
+    if is_true "${AUTOLOAD_STDLIB}"; then
+        paths+=("${STDLIBDIR}")
+    fi
+
+    if [[ "${#LOAD_PATHS[@]}" -gt 0 ]]; then
+        paths+=("${LOAD_PATHS[@]}")
+    fi
+
+    if [[ "${#paths[@]}" -gt 0 ]]; then
+        while read -r path; do
+            rendered_file "${path}"
+        done < <(loadable_files "${paths[@]}")
+    fi
 
     if [[ "${#MACROS[@]}" -gt 0 ]]; then
         for macro in "${MACROS[@]}"; do
@@ -923,9 +202,9 @@ render_script () {
         done
     fi
 
-    printf '%s\n' "# Entry point"
     printf '%s\n' "${command}"
 
+    printf 'msg_debug "%s"' 'done'
 }
 
 
@@ -936,7 +215,7 @@ execute () {
     local sudo_password
     local force_sudo_password=FALSE
 
-    local handler rc do_attach multiplexer fn
+    local handler rc do_attach multiplexer
 
     # Loop until SUDO password is accepted
     while true; do
@@ -965,7 +244,7 @@ execute () {
 
         msg_debug "Executing on ${target}"
 
-        { cmd "${handler[@]}" || rc=$?; } < <(render_script "${command}")
+        { cmd "${handler[@]}" || rc=$?; } < <(rendered_script "${command}")
 
         case "${rc}" in
             "${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}")
@@ -1019,14 +298,14 @@ main () {
     local inventory_file rc
     local -a targets=()
 
-    [[ "${#}" -gt 0 ]] || display_automated_usage_and_exit 1
+    [[ "${#}" -gt 0 ]] || display_usage_and_exit 1
 
     while [[ "${#}" -gt 0 ]]; do
 
         case "${1}" in
 
             -h|--help|help|'')
-                display_automated_usage_and_exit
+                display_usage_and_exit
                 ;;
 
             -v|--verbose)
@@ -1125,6 +404,14 @@ main () {
 
             --local)
                 LOCAL=TRUE
+                ;;
+
+            --no-autoload-stdlib)
+                AUTOLOAD_STDLIB=FALSE
+                ;;
+
+            --no-autoload-facts)
+                AUTOLOAD_FACTS=FALSE
                 ;;
 
             *)
