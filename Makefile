@@ -14,6 +14,7 @@ all: build
 
 clean:
 	rm -f automated-config.sh
+	rm -rf bdist sdist
 
 build:
 	sed -e 's~@LIBDIR@~$(LIBDIR)/automated~g' automated-config.sh.in >automated-config.sh
