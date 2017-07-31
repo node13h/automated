@@ -1,2 +1,4 @@
 *~
 automated-config.sh
+bdist/*
+sdist/*
