@@ -1,4 +1,5 @@
-# TODO VERSION
+VERSION := $(shell cat VERSION)
+RELEASE_BRANCH := master
 
 PREFIX := /usr/local
 BINDIR = $(PREFIX)/bin
@@ -7,7 +8,7 @@ SHAREDIR = $(PREFIX)/share
 DOCSDIR = $(SHAREDIR)/doc
 MANDIR = $(SHAREDIR)/man
 
-.PHONY: install build clean uninstall
+.PHONY: install build clean uninstall release
 
 all: build
 
@@ -34,3 +35,6 @@ uninstall:
 	rm -rf "$(DESTDIR)$(DOCSDIR)/automated"
 	rm -f "$(DESTDIR)$(BINDIR)/automated-config.sh"
 	rm -f "$(DESTDIR)$(BINDIR)/automated.sh"
+
+release:
+	git tag $(VERSION)
