@@ -19,9 +19,10 @@ build:
 	sed -e 's~@LIBDIR@~$(LIBDIR)/automated~g' automated-config.sh.in >automated-config.sh
 
 install: build
+	install -m 0755 -d "$(DESTDIR)$(BINDIR)"
 	install -m 0755 -d "$(DESTDIR)$(LIBDIR)/automated/stdlib"
 	install -m 0755 -d "$(DESTDIR)$(LIBDIR)/automated/facts"
-	install -m 0755 -d "$(DESTDIR)$(DOCSDIR)//automated"
+	install -m 0755 -d "$(DESTDIR)$(DOCSDIR)/automated"
 	install -m 0644 libautomated.sh "$(DESTDIR)$(LIBDIR)/automated"
 	install -m 0644 pty_helper.py "$(DESTDIR)$(LIBDIR)/automated"
 	install -m 0755 automated-config.sh "$(DESTDIR)$(BINDIR)"
