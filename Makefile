@@ -44,6 +44,7 @@ dist:
 	mkdir -p sdist; \
 	git archive "--prefix=automated-$(VERSION)/" -o "sdist/automated-$(VERSION).tar.gz" "$(VERSION)"
 
+rpm: PREFIX := /usr
 rpm: dist
 	mkdir -p bdist; \
 	rpm_version=$$(cut -f 1 -d '-' <<< "$(VERSION)"); \
