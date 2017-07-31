@@ -197,6 +197,8 @@ EOF
     fi
 
     printf '%s\n' "${command}"
+
+    printf 'msg_debug "%s"' 'done'
 }
 
 
