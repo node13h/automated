@@ -135,8 +135,11 @@ rendered_script () {
         fi
     fi
 
-    printf '%s\n' 'set -euo pipefail'
+    cat <<"EOF"
+#!/usr/bin/env bash
 
+set -euo pipefail
+EOF
     rendered_file "${LIBDIR%/}/libautomated.sh"
 
     printf 'DEBUG=%s\n' "${DEBUG}"
