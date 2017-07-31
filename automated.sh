@@ -119,6 +119,8 @@ OPTIONS:
   --tmux-sock-prefix PATH     Use custom PATH prefix for tmux socket on the
                               target.
                               Default: ${TMUX_SOCK_PREFIX}
+  --no-autoload-stdlib        Disable autoloading of the ${STDLIBDIR%/}/*.sh
+  --no-autoload-facts         Disable autoloading of the ${FACTDIR%/}/*.sh
 
 EOF
 }
@@ -401,6 +403,14 @@ main () {
 
             --local)
                 LOCAL=TRUE
+                ;;
+
+            --no-autoload-stdlib)
+                AUTOLOAD_STDLIB=FALSE
+                ;;
+
+            --no-autoload-facts)
+                AUTOLOAD_FACTS=FALSE
                 ;;
 
             *)
