@@ -17,7 +17,7 @@ A tool to remotely execute your Bash code
 rm -rf --one-file-system --preserve-root -- "%{buildroot}"
 
 %install
-make install DESTDIR="%{buildroot}" prefix="%{prefix}"
+make install DESTDIR="%{buildroot}" PREFIX="%{prefix}"
 
 %files
 %{_bindir}/*
