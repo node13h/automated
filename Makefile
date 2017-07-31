@@ -17,7 +17,8 @@ clean:
 	rm -rf bdist sdist
 
 build:
-	sed -e 's~@LIBDIR@~$(LIBDIR)/automated~g' automated-config.sh.in >automated-config.sh
+	sed -e 's~@LIBDIR@~$(LIBDIR)/automated~g' \
+	    -e 's~@VERSION@~$(VERSION)~g' automated-config.sh.in >automated-config.sh
 
 install: build
 	install -m 0755 -d "$(DESTDIR)$(BINDIR)"

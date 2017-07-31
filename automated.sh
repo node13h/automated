@@ -107,6 +107,7 @@ OPTIONS:
                               specific scripts.
                               Can be specified multiple times.
   -h, --help                  Display help text and exit
+  --version                   Output version and exit
   -v, --verbose               Enable verbose output
   --local                     Do the local call only. Any remote targets will
                               be ignored.
@@ -412,6 +413,10 @@ main () {
 
             --no-autoload-facts)
                 AUTOLOAD_FACTS=FALSE
+                ;;
+
+            --version)
+                display_version_and_exit
                 ;;
 
             *)

@@ -467,3 +467,9 @@ display_usage_and_exit () {
 
     exit "${1:-0}"
 }
+
+display_version_and_exit () {
+    printf '%s\n' "${VERSION}"
+
+    exit "${1:-0}"
+}

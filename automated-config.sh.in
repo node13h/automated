@@ -3,3 +3,4 @@
 set -euo pipefail
 
 LIBDIR=@LIBDIR@
+VERSION=@VERSION@
