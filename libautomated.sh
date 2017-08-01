@@ -105,7 +105,7 @@ colorized () {
     if is_true "${DISABLE_COLOUR}"; then
         processor=(cat)
     else
-        processor=(sed -e 1s/^/$'\e'\["${colour}"m/ -e \$s/$/$'\e'\[0m/)
+        processor=(sed -e s/^/$'\e'\["${colour}"m/ -e s/$/$'\e'\[0m/)
     fi
 
     "${processor[@]}"
