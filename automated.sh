@@ -254,7 +254,7 @@ execute () {
             output_processor=(cat)
         fi
 
-        { cmd "${handler[@]}" | "${output_processor[@]}" || rc=$?; } < <(rendered_script "${target}" "${command}")
+        { cmd "${handler[@]}" > >("${output_processor[@]}") 2> >("${output_processor[@]}" >&2) || rc=$?; } < <(rendered_script "${target}" "${command}")
 
         case "${rc}" in
             "${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}")
