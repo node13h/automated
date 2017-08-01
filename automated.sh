@@ -51,9 +51,16 @@ MACROS=()
 
 usage () {
     cat <<EOF
-Usage: ${PROG} [OPTIONS] [[<[USER@]ADDRESS[:PORT]>] ...]
+Usage: ${PROG} [OPTIONS] [[TARGET] ...]
 
 Runs commands on local host or one or more remote targets.
+
+TARGET
+
+  Target is an address of the host you want to run the code on. It may
+  include the username and the port number (user@example.com:22 for example).
+  Target can be specified multiple times.
+
 
 OPTIONS:
 
