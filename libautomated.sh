@@ -117,6 +117,12 @@ text_block () {
     sed -e 1s/^/"$(sed_replacement "BEGIN ${name}")"\\n/ -e \$s/$/\\n"$(sed_replacement "END ${name}")"/
 }
 
+prefixed_lines () {
+    local prefix="${1}"
+
+    sed -e "s/^/$(sed_replacement "${prefix}")/"
+}
+
 # shellcheck disable=SC2120
 to_debug () {
     local colour="${1:-${ANSI_FG_YELLOW}}"
