@@ -37,6 +37,7 @@ IGNORE_FAILED=FALSE
 DUMP_SCRIPT=FALSE
 AUTOLOAD_STDLIB=TRUE
 AUTOLOAD_FACTS=TRUE
+PREFIX_TARGET_OUTPUT=FALSE
 
 # TODO Change to main
 CMD='all'
@@ -217,6 +218,7 @@ execute () {
     local force_sudo_password=FALSE
 
     local handler rc do_attach multiplexer
+    local -a output_processor
 
     # Loop until SUDO password is accepted
     while true; do
@@ -245,7 +247,13 @@ execute () {
 
         msg_debug "Executing on ${target}"
 
-        { cmd "${handler[@]}" || rc=$?; } < <(rendered_script "${command}")
+        if is_true "${PREFIX_TARGET_OUTPUT}"; then
+            output_processor=(prefixed_lines "${target}: ")
+        else
+            output_processor=(cat)
+        fi
+
+        { cmd "${handler[@]}" | "${output_processor[@]}" || rc=$?; } < <(rendered_script "${command}")
 
         case "${rc}" in
             "${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}")
@@ -331,6 +339,10 @@ main () {
 
             --ignore-failed)
                 IGNORE_FAILED=TRUE
+                ;;
+
+            --prefix-target-output)
+                PREFIX_TARGET_OUTPUT=TRUE
                 ;;
 
             --dump-script)
