@@ -197,7 +197,11 @@ md5 () {
 }
 
 cmd () {
-    printf 'CMD %s\n' "$(quoted "${@}")" | to_debug "${ANSI_FG_GREEN}"
+    # For some reason bash 4.2 does play well if the pipe is used in this function
+    # causing use cases like `cmd cat <(echo "hello")` to fail.
+    # For now I am redirecting the STDOUT to a subprocess as an
+    # alternative.
+    printf 'CMD %s\n' "$(quoted "${@}")" > >(to_debug "${ANSI_FG_GREEN}")
 
     "${@}"
 }
