@@ -112,16 +112,9 @@ colorized () {
 }
 
 text_block () {
-    local name="${1:-}"
-    local -a processor
+    local name="${1}"
 
-    if [[ -n "${name}" ]]; then
-        processor=(sed -e 1s/^/"$(sed_replacement "BEGIN ${name}")"\\n/ -e \$s/$/\\n"$(sed_replacement "END ${name}")"/)
-    else
-        processor=(cat)
-    fi
-
-    "${processor[@]}"
+    sed -e 1s/^/"$(sed_replacement "BEGIN ${name}")"\\n/ -e \$s/$/\\n"$(sed_replacement "END ${name}")"/
 }
 
 # shellcheck disable=SC2120
