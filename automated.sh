@@ -147,7 +147,7 @@ rendered_script () {
 
 set -euo pipefail
 EOF
-    rendered_file "${LIBDIR%/}/libautomated.sh"
+    sourced_file "${LIBDIR%/}/libautomated.sh"
 
     printf 'DEBUG=%s\n' "${DEBUG}"
     printf 'AUTOMATED_OWNER_UID=%s\n' "${OWNER_UID_SOURCE}"
@@ -155,13 +155,13 @@ EOF
 
     if [[ "${#EXPORT_VARS[@]}" -gt 0 ]]; then
         for var in "${EXPORT_VARS[@]}"; do
-            rendered_var "${var}"
+            declared_var "${var}"
         done
     fi
 
     if [[ "${#EXPORT_FUNCTIONS[@]}" -gt 0 ]]; then
         for fn in "${EXPORT_FUNCTIONS[@]}"; do
-            rendered_function "${fn}"
+            declared_function "${fn}"
         done
     fi
 
@@ -193,7 +193,7 @@ EOF
 
     if [[ "${#paths[@]}" -gt 0 ]]; then
         while read -r path; do
-            rendered_file "${path}"
+            sourced_file "${path}"
         done < <(loadable_files "${paths[@]}")
     fi
 

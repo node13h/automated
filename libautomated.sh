@@ -287,12 +287,6 @@ ask_sudo_password () {
     printf '%s\n' "${sudo_password}"
 }
 
-env_var_definition () {
-    local var="${1}"
-
-    printf '%s=%s\n' "${var}" "$(quoted "${!var}")"
-}
-
 target_as_ssh_arguments () {
     local target="${1}"
     local username address port
@@ -440,21 +434,21 @@ ${boundary}
 EOF
 }
 
-rendered_var () {
+declared_var () {
     local var="${1}"
 
-    printf '%s\n' "$(env_var_definition "${var}")"
+    declare -p "${var}"
     printf 'msg_debug "declared variable %s"\n' "$(quoted "${var}")"
 }
 
-rendered_function () {
+declared_function () {
     local fn="${1}"
 
-    declare -f "${fn}"
+    declare -pf "${fn}"
     printf 'msg_debug "declared function %s"\n' "$(quoted "${fn}")"
 }
 
-rendered_file () {
+sourced_file () {
     local path="${1}"
 
     cat "${path}"
