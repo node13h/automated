@@ -8,7 +8,7 @@ SHAREDIR = $(PREFIX)/share
 DOCSDIR = $(SHAREDIR)/doc
 MANDIR = $(SHAREDIR)/man
 
-.PHONY: install build clean uninstall release dist rpm
+.PHONY: install build clean uninstall release sdist rpm
 
 all: build
 
@@ -42,12 +42,12 @@ uninstall:
 release:
 	git tag $(VERSION)
 
-dist:
+sdist:
 	mkdir -p sdist; \
 	git archive "--prefix=automated-$(VERSION)/" -o "sdist/automated-$(VERSION).tar.gz" "$(VERSION)"
 
 rpm: PREFIX := /usr
-rpm: dist
+rpm: sdist
 	mkdir -p bdist; \
 	rpm_version=$$(cut -f 1 -d '-' <<< "$(VERSION)"); \
 	rpm_release=$$(cut -s -f 2 -d '-' <<< "$(VERSION)"); \
