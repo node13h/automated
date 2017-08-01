@@ -129,7 +129,8 @@ EOF
 }
 
 rendered_script () {
-    local command="${1}"
+    local target="${1}"
+    local command="${2}"
 
     local path macro var fn pair
     local -a paths=()
@@ -153,6 +154,7 @@ EOF
     printf 'DEBUG=%s\n' "${DEBUG}"
     printf 'AUTOMATED_OWNER_UID=%s\n' "${OWNER_UID_SOURCE}"
     printf 'TMUX_SOCK_PREFIX=%s\n' "${TMUX_SOCK_PREFIX}"
+    printf 'CURRENT_TARGET=%s\n' "${target}"
 
     if [[ "${#EXPORT_VARS[@]}" -gt 0 ]]; then
         for var in "${EXPORT_VARS[@]}"; do
@@ -253,7 +255,7 @@ execute () {
             output_processor=(cat)
         fi
 
-        { cmd "${handler[@]}" | "${output_processor[@]}" || rc=$?; } < <(rendered_script "${command}")
+        { cmd "${handler[@]}" | "${output_processor[@]}" || rc=$?; } < <(rendered_script "${target}" "${command}")
 
         case "${rc}" in
             "${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}")
