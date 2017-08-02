@@ -290,19 +290,40 @@ ask_sudo_password () {
     printf '%s\n' "${sudo_password}"
 }
 
+target_as_vars () {
+    local target="${1}"
+    local username_var="${2:-username}"
+    local address_var="${3:-address}"
+    local port_var="${4:-port}"
+
+    local username address port
+    local -a args=()
+
+    if [[ "${target}" =~ ^((.+)@)?(\[([:0-9A-Fa-f]+)\])(:([0-9]+))?$ ]] ||
+           [[ "${target}" =~ ^((.+)@)?(([-.0-9A-Za-z]+))(:([0-9]+))?$ ]]; then
+        printf '%s=%s\n' "${username_var}" "$(quoted "${BASH_REMATCH[2]}")"
+        printf '%s=%s\n' "${address_var}" "$(quoted "${BASH_REMATCH[4]}")"
+        printf '%s=%s\n' "${port_var}" "$(quoted "${BASH_REMATCH[6]}")"
+    else
+        return 1
+    fi
+}
+
+target_address_only () {
+    local target="${1}"
+    local username address port
+
+    eval "$(target_as_vars "${target}" username address port)"
+
+    printf '%s\n' "${address}"
+}
+
 target_as_ssh_arguments () {
     local target="${1}"
     local username address port
     local -a args=()
 
-    if [[ "${target}" =~ ^((.+)@)?(\[([:0-9A-Fa-f]+)\])(:([0-9]+))?$ ]] ||
-       [[ "${target}" =~ ^((.+)@)?(([-.0-9A-Za-z]+))(:([0-9]+))?$ ]]; then
-        username="${BASH_REMATCH[2]}"
-        address="${BASH_REMATCH[4]}"
-        port="${BASH_REMATCH[6]}"
-    else
-        return 1
-    fi
+    eval "$(target_as_vars "${target}" username address port)"
 
     if [[ -n "${port}" ]]; then
         args+=(-p "${port}")
