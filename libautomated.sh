@@ -402,9 +402,10 @@ drop_fn_name () {
 drop () {
     local file_id="${1}"
     local dst="${2}"
+    local mode="${3:-}"
 
     # shellcheck disable=SC2091
-    "$(drop_fn_name "${file_id}")" "${dst}"
+    "$(drop_fn_name "${file_id}")" "${dst}" "${mode}"
 }
 
 file_as_function () {
@@ -423,9 +424,10 @@ file_as_function () {
     cat <<EOF
 ${fn_name} () {
   local dst="\${1}"
+  local mode="\${2:-${mode}}"
 
   touch "\${dst}"
-  chmod ${mode} "\${dst}"
+  chmod "\${mode}" "\${dst}"
   base64 -d <<"${boundary}" | gzip -d >"\${dst}"
 EOF
 
