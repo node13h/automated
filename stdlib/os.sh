@@ -32,10 +32,6 @@ quoted_for_systemd () {
     printf '%s\n' "${result[*]}"
 }
 
-systemd_daemon_reload () {
-    cmd systemctl daemon-reload
-}
-
 packages_ensure () {
     local command="${1}"
     shift
