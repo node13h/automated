@@ -44,8 +44,8 @@ packages_ensure () {
 }
 
 service_ensure () {
-    local service="${1}"
-    local command="${2}"
+    local command="${1}"
+    local service="${2}"
 
     if is_true "${FACT_SYSTEMD}"; then
         case "${command}" in
