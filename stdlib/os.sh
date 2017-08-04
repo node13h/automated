@@ -20,6 +20,22 @@
 SUPPORTED_MULTIPLEXERS=(tmux)
 
 
+quoted_for_systemd () {
+    local arg
+    local -a result=()
+
+    for arg in "${@}"; do
+        # shellcheck disable=SC1003
+        result+=("\"$(translated "${arg}" '\' '\\' '"' '\"')\"")
+    done
+
+    printf '%s\n' "${result[*]}"
+}
+
+systemd_daemon_reload () {
+    cmd systemctl daemon-reload
+}
+
 packages_ensure () {
     local command="${1}"
     shift
