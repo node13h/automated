@@ -339,7 +339,7 @@ target_as_ssh_arguments () {
 }
 
 pty_helper_script () {
-    cat "${LIBDIR%/}/pty_helper.py"
+    cat "${AUTOMATED_LIBDIR%/}/pty_helper.py"
 }
 
 pty_helper_settings () {
