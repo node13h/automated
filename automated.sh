@@ -159,10 +159,10 @@ set -euo pipefail
 EOF
     sourced_file "${LIBDIR%/}/libautomated.sh"
 
-    printf 'DEBUG=%s\n' "${DEBUG}"
-    printf 'AUTOMATED_OWNER_UID=%s\n' "${OWNER_UID_SOURCE}"
-    printf 'TMUX_SOCK_PREFIX=%s\n' "${TMUX_SOCK_PREFIX}"
-    printf 'CURRENT_TARGET=%s\n' "${target}"
+    printf 'DEBUG=%s\n' "$(quoted "${DEBUG}")"
+    printf 'AUTOMATED_OWNER_UID=%s\n' "${OWNER_UID_SOURCE}"  # Do not quote!
+    printf 'TMUX_SOCK_PREFIX=%s\n' "$(quoted "${TMUX_SOCK_PREFIX}")"
+    printf 'CURRENT_TARGET=%s\n' "$(quoted "${target}")"
 
     if [[ "${#EXPORT_VARS[@]}" -gt 0 ]]; then
         for var in "${EXPORT_VARS[@]}"; do
