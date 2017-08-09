@@ -22,14 +22,14 @@ set -euo pipefail
 # shellcheck disable=SC1091
 source automated-config.sh
 # shellcheck disable=SC1090
-source "${LIBDIR%/}/libautomated.sh"
+source "${AUTOMATED_LIBDIR%/}/libautomated.sh"
 
 # TODO Throw error on unsupported systems (CentOS5, perhaps Ubuntu 10.04)
 
 PROG=$(basename "${BASH_SOURCE:-}")
 
-STDLIBDIR="${LIBDIR%/}/stdlib"
-FACTDIR="${LIBDIR%/}/facts"
+STDLIBDIR="${AUTOMATED_LIBDIR%/}/stdlib"
+FACTDIR="${AUTOMATED_LIBDIR%/}/facts"
 
 LOCAL=FALSE
 AUTO_ATTACH=TRUE
@@ -157,7 +157,7 @@ rendered_script () {
 
 set -euo pipefail
 EOF
-    sourced_file "${LIBDIR%/}/libautomated.sh"
+    sourced_file "${AUTOMATED_LIBDIR%/}/libautomated.sh"
 
     printf 'DEBUG=%s\n' "$(quoted "${DEBUG}")"
     printf 'AUTOMATED_OWNER_UID=%s\n' "${OWNER_UID_SOURCE}"  # Do not quote!
