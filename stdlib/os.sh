@@ -20,6 +20,30 @@
 SUPPORTED_MULTIPLEXERS=(tmux)
 
 
+enable_epel () {
+    if ! [[ -e /etc/yum.repos.d/epel.repo ]]; then
+        cmd yum localinstall -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${FACT_OS_VERSION}.noarch.rpm"
+    fi
+}
+
+user_exists () {
+    local username="${1}"
+
+    getent passwd "${username}" >/dev/null
+}
+
+group_exists () {
+    local groupname="${1}"
+
+    getent group "${groupname}" >/dev/null
+}
+
+homedir () {
+    local username="${1}"
+
+    getent passwd "${username}" | cut -d ':' -f 6
+}
+
 quoted_for_systemd () {
     local arg
     local -a result=()
