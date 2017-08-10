@@ -317,14 +317,14 @@ main () {
     local inventory_file rc
     local -a targets=()
 
-    [[ "${#}" -gt 0 ]] || display_usage_and_exit 1
+    [[ "${#}" -gt 0 ]] || exit_after 1 usage | to_stderr
 
     while [[ "${#}" -gt 0 ]]; do
 
         case "${1}" in
 
             -h|--help|help|'')
-                display_usage_and_exit
+                exit_after 0 usage
                 ;;
 
             -v|--verbose)
@@ -438,7 +438,7 @@ main () {
                 ;;
 
             --version)
-                display_version_and_exit
+                exit_after 0 printf '%s\n' "${AUTOMATED_VERSION}"
                 ;;
 
             *)

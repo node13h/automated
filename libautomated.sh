@@ -482,14 +482,11 @@ sourced_file () {
     printf 'msg_debug "sourced %s"\n' "$(quoted "${path}")"
 }
 
-display_usage_and_exit () {
-    usage | to_stderr
+exit_after () {
+    local exit_code="${1}"
+    shift
 
-    exit "${1:-0}"
-}
+    "${@}"
 
-display_version_and_exit () {
-    printf '%s\n' "${VERSION}"
-
-    exit "${1:-0}"
+    exit "${exit_code}"
 }
