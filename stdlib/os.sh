@@ -62,16 +62,16 @@ packages_ensure () {
 
     case "${FACT_OS_FAMILY}-${command}" in
         'RedHat-present')
-            yum -y -q install "${@}"
+            cmd yum -y install "${@}"
             ;;
         'RedHat-absent')
-            yum -y -q remove "${@}"
+            cmd yum -y remove "${@}"
             ;;
         'Debian-present')
-            apt-get -yqq install "${@}"
+            cmd apt-get -y install "${@}"
             ;;
         'Debian-absent')
-            apt-get -yqq remove "${@}"
+            cmd apt-get -y remove "${@}"
             ;;
         *)
             throw "Command ${command} is unsupported on ${FACT_OS_FAMILY}"
