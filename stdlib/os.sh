@@ -132,7 +132,7 @@ multiplexer_present () {
 
 multiplexer_ensure_installed () {
     if ! multiplexer_present >/dev/null; then
-        packages_ensure installed "${SUPPORTED_MULTIPLEXERS[0]}"  # Install first one
+        packages_ensure present "${SUPPORTED_MULTIPLEXERS[0]}"  # Install first one
     fi
 }
 
