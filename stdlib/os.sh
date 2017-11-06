@@ -86,25 +86,25 @@ service_ensure () {
     if is_true "${FACT_SYSTEMD}"; then
         case "${command}" in
             enabled)
-                systemctl enable "${service}"
+                cmd systemctl enable "${service}"
                 ;;
             disabled)
-                systemctl disable "${service}"
+                cmd systemctl disable "${service}"
                 ;;
         esac
     else
         case "${FACT_OS_FAMILY}-${command}" in
             'RedHat-enabled')
-                chkconfig "${service}" on
+                cmd chkconfig "${service}" on
                 ;;
             'RedHat-disabled')
-                chkconfig "${service}" off
+                cmd chkconfig "${service}" off
                 ;;
             'Debian-enabled')
-                update-rc.d "${service}" enable
+                cmd update-rc.d "${service}" enable
                 ;;
             'Debian-disabled')
-                update-rc.d "${service}" disable
+                cmd update-rc.d "${service}" disable
                 ;;
             *)
                 throw "Command ${command} is unsupported on ${FACT_OS_FAMILY}"
