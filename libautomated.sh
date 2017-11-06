@@ -33,6 +33,8 @@ EXIT_RUNNING_IN_TMUX=68
 # TODO EXIT_RUNNING_IN_SCREEN=69
 EXIT_MULTIPLEXER_ALREADY_RUNNING=70
 
+SUPPORTED_MULTIPLEXERS=(tmux)
+
 SUDO_UID_VARIABLE='AUTOMATED_SUDO_UID'
 OWNER_UID_SOURCE="\${${SUDO_UID_VARIABLE}:-\$(id -u)}"
 
@@ -268,6 +270,55 @@ attach_to_multiplexer () {
     case "${multiplexer}" in
         tmux)
             cmd "${handler[@]}" "tmux -S \"${TMUX_SOCK_PREFIX}-${OWNER_UID_SOURCE}\" attach"
+            ;;
+
+        # TODO screen
+    esac
+}
+
+tmux_command () {
+    cmd tmux -S "${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}" "${@}"
+}
+
+multiplexer_present () {
+    local multiplexer
+
+    for multiplexer in "${SUPPORTED_MULTIPLEXERS[@]}"; do
+        if cmd_is_available "${multiplexer}"; then
+            printf '%s\n' "${multiplexer}"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+supported_multiplexers () {
+    printf '%s\n' "${SUPPORTED_MULTIPLEXERS[@]}"
+}
+
+run_in_multiplexer () {
+    local multiplexer
+
+    if ! multiplexer=$(multiplexer_present); then
+        throw "Multiplexer is not available. Please install one of the following: ${SUPPORTED_MULTIPLEXERS[*]}"
+    fi
+
+    case "${multiplexer}" in
+        tmux)
+            if tmux_command ls 2>/dev/null | to_debug; then
+                msg_debug "Multiplexer is already running"
+                exit "${EXIT_MULTIPLEXER_ALREADY_RUNNING}"
+            else
+                msg_debug "Starting multiplexer and sending commands"
+                tmux_command new-session -d
+                tmux_command -l send "${@}"
+                tmux_command send ENTER
+            fi
+
+            chown "${AUTOMATED_OWNER_UID}" "${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}"
+
+            exit "${EXIT_RUNNING_IN_TMUX}"
             ;;
 
         # TODO screen
