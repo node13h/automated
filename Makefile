@@ -22,7 +22,6 @@ build:
 
 install: build
 	install -m 0755 -d "$(DESTDIR)$(BINDIR)"
-	install -m 0755 -d "$(DESTDIR)$(LIBDIR)/automated/stdlib"
 	install -m 0755 -d "$(DESTDIR)$(LIBDIR)/automated/facts"
 	install -m 0755 -d "$(DESTDIR)$(DOCSDIR)/automated"
 	install -m 0644 libautomated.sh "$(DESTDIR)$(LIBDIR)/automated"
@@ -30,7 +29,6 @@ install: build
 	install -m 0755 automated-config.sh "$(DESTDIR)$(BINDIR)"
 	install -m 0755 automated.sh "$(DESTDIR)$(BINDIR)"
 	install -m 0644 README.* "$(DESTDIR)$(DOCSDIR)/automated"
-	install -m 0644 stdlib/*.sh "$(DESTDIR)$(LIBDIR)/automated/stdlib"
 	install -m 0644 facts/*.sh "$(DESTDIR)$(LIBDIR)/automated/facts"
 
 uninstall:

@@ -28,14 +28,12 @@ source "${AUTOMATED_LIBDIR%/}/libautomated.sh"
 
 PROG=$(basename "${BASH_SOURCE:-}")
 
-STDLIBDIR="${AUTOMATED_LIBDIR%/}/stdlib"
 FACTDIR="${AUTOMATED_LIBDIR%/}/facts"
 
 LOCAL=FALSE
 AUTO_ATTACH=TRUE
 IGNORE_FAILED=FALSE
 DUMP_SCRIPT=FALSE
-AUTOLOAD_STDLIB=TRUE
 AUTOLOAD_FACTS=TRUE
 PREFIX_TARGET_OUTPUT=FALSE
 
@@ -128,7 +126,6 @@ OPTIONS:
   --tmux-sock-prefix PATH     Use custom PATH prefix for tmux socket on the
                               target.
                               Default: ${TMUX_SOCK_PREFIX}
-  --no-autoload-stdlib        Disable autoloading of the ${STDLIBDIR%/}/*.sh
   --no-autoload-facts         Disable autoloading of the ${FACTDIR%/}/*.sh
   --prefix-target-output      Prefix all output from every target with
                               a "TARGET: "
@@ -192,10 +189,6 @@ EOF
 
     if is_true "${AUTOLOAD_FACTS}"; then
         paths+=("${FACTDIR}")
-    fi
-
-    if is_true "${AUTOLOAD_STDLIB}"; then
-        paths+=("${STDLIBDIR}")
     fi
 
     if [[ "${#LOAD_PATHS[@]}" -gt 0 ]]; then
@@ -427,10 +420,6 @@ main () {
 
             --local)
                 LOCAL=TRUE
-                ;;
-
-            --no-autoload-stdlib)
-                AUTOLOAD_STDLIB=FALSE
                 ;;
 
             --no-autoload-facts)
