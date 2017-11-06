@@ -56,6 +56,8 @@ ANSI_FG_BRIGHT_MAGENTA=95
 ANSI_FG_BRIGHT_CYAN=96
 ANSI_FG_BRIGHT_WHITE=97
 
+ANSWER_READ_COMMAND=('read' '-r')
+
 
 newline () { printf '\n'; }
 
@@ -272,19 +274,43 @@ attach_to_multiplexer () {
     esac
 }
 
+interactive_answer () {
+    local message="${1}"
+    local target="${2}"
+    local default_value="${3:-}"
+
+    local answer
+
+    local -a full_message=("${message}" "(${target})")
+    [[ -z "${default_value}" ]] || full_message+=("[${default_value}]")
+
+    {
+        printf '%s: ' "${full_message[*]}"
+        "${ANSWER_READ_COMMAND[@]}" answer
+        newline
+
+    } </dev/tty >/dev/tty
+
+    if [[ -n "${default_value}" && -z "${answer}" ]]; then
+        printf '%s\n' "${default_value}"
+    else
+        printf '%s\n' "${answer}"
+    fi
+}
+
+interactive_secret () {
+    local -a ANSWER_READ_COMMAND=('read' '-r' '-s')
+
+    interactive_answer "${@}"
+}
+
 ask_sudo_password () {
     local sudo_password
 
     if is_true "${SUDO_PASSWORD_ON_STDIN}"; then
         read -r sudo_password
     else
-        {
-
-            printf 'SUDO password (%s): ' "${1:-localhost}"
-            read -r -s sudo_password
-            newline
-
-        } </dev/tty >/dev/tty
+        sudo_password=$(interactive_secret "SUDO password" "${1:-localhost}")
     fi
 
     printf '%s\n' "${sudo_password}"
