@@ -326,17 +326,17 @@ run_in_multiplexer () {
 }
 
 interactive_answer () {
-    local message="${1}"
-    local target="${2}"
+    local target="${1}"
+    local prompt="${2}"
     local default_value="${3:-}"
 
     local answer
 
-    local -a full_message=("${message}" "(${target})")
-    [[ -z "${default_value}" ]] || full_message+=("[${default_value}]")
+    local -a message=("${prompt}" "(${target})")
+    [[ -z "${default_value}" ]] || message+=("[${default_value}]")
 
     {
-        printf '%s: ' "${full_message[*]}"
+        printf '%s: ' "${message[*]}"
         "${ANSWER_READ_COMMAND[@]}" answer
         newline
 
@@ -361,7 +361,7 @@ ask_sudo_password () {
     if is_true "${SUDO_PASSWORD_ON_STDIN}"; then
         read -r sudo_password
     else
-        sudo_password=$(interactive_secret "SUDO password" "${1:-localhost}")
+        sudo_password=$(interactive_secret "${1:-localhost}" "SUDO password")
     fi
 
     printf '%s\n' "${sudo_password}"
