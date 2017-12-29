@@ -2,3 +2,4 @@
 automated-config.sh
 bdist/*
 sdist/*
+.vagrant/*
