@@ -57,5 +57,5 @@ elif [[ -f /etc/debian_version ]]; then
              printf 'FACT_OS_RELEASE=%s\n' "${VERSION}")
 
 else
-    FACT_US_FAMILY='Unsupported'
+    FACT_OS_FAMILY='Unsupported'
 fi
