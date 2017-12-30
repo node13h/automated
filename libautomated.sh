@@ -436,7 +436,7 @@ in_proper_context () {
     local cmdline=()
 
     if is_true "${SUDO}"; then
-        cmdline+=("$(pty_helper_settings) python <(base64 -d <<< $(pty_helper_script | gzip | base64 -w 0) | gunzip)")
+        cmdline+=("$(pty_helper_settings) python <(python -m base64 -d <<< $(pty_helper_script | gzip | base64_encode) | gunzip)")
 
         if ! is_true "${force_sudo_password}" && is_true "${SUDO_PASSWORDLESS}"; then
             cmdline+=("--sudo-passwordless")
@@ -481,10 +481,10 @@ file_as_code () {
     cat <<EOF
 touch $(quoted "${dst}")
 chmod ${mode} $(quoted "${dst}")
-base64 -d <<"${boundary}" | gzip -d >$(quoted "${dst}")
+base64_decode <<"${boundary}" | gzip -d >$(quoted "${dst}")
 EOF
 
-    gzip -c "${src}" | base64
+    gzip -c "${src}" | base64_encode
 
     cat <<EOF
 ${boundary}
@@ -526,10 +526,10 @@ ${fn_name} () {
 
   touch "\${dst}"
   chmod "\${mode}" "\${dst}"
-  base64 -d <<"${boundary}" | gzip -d >"\${dst}"
+  base64_decode <<"${boundary}" | gzip -d >"\${dst}"
 EOF
 
-    gzip -c "${src}" | base64
+    gzip -c "${src}" | base64_encode
 
     cat <<EOF
 ${boundary}
@@ -566,4 +566,26 @@ exit_after () {
     "${@}"
 
     exit "${exit_code}"
+}
+
+base64_encode () {
+    if [[ "${LOCAL_KERNEL}" = 'Linux' ]] && cmd_is_available base64; then
+        base64 -w 0
+    elif cmd_is_available openssl; then
+        openssl base64 -A
+    else
+        python -c 'from __future__ import unicode_literals, print_function; import sys; import base64; stdout = sys.stdout.buffer.write if hasattr(sys.stdout, "buffer") else sys.stdout.write; stdin = sys.stdin.buffer.read if hasattr(sys.stdin, "buffer") else sys.stdin.read; list(filter(None, (stdout(base64.b64encode(i)) for i in iter(lambda: stdin(3072), b""))))'
+    fi
+
+    printf '\n'
+}
+
+base64_decode () {
+    if [[ "${LOCAL_KERNEL}" = 'Linux' ]] && cmd_is_available base64; then
+        base64 -d
+    elif cmd_is_available openssl; then
+        openssl base64 -d -A
+    else
+        python -c 'from __future__ import unicode_literals, print_function; import sys; import base64; stdout = sys.stdout.buffer.write if hasattr(sys.stdout, "buffer") else sys.stdout.write; stdin = sys.stdin.buffer.read if hasattr(sys.stdin, "buffer") else sys.stdin.read; list(filter(None, (stdout(base64.b64decode(i)) for i in iter(lambda: stdin(3072), b""))))'
+    fi
 }
