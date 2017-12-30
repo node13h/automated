@@ -18,7 +18,6 @@
 import os
 import sys
 import pty
-import select
 import termios
 import time
 import argparse
