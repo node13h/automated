@@ -233,7 +233,7 @@ file_mode () {
             stat -c "%#03a" "${path}"
             ;;
         *)
-            python -c "import sys, os, stat; print oct(stat.S_IMODE(os.stat(sys.argv[1]).st_mode))" "${path}"
+            python_interpreter -c "from __future__ import print_function; import sys, os, stat; print('0{:o}'.format((stat.S_IMODE(os.stat(sys.argv[1]).st_mode))))" "${path}"
             ;;
     esac
 }
@@ -249,7 +249,7 @@ file_mtime () {
             stat -c "%Y" "${path}"
             ;;
         *)
-            python -c "import sys, os, stat; print os.stat(sys.argv[1])[stat.ST_MTIME]" "${path}"
+            python_interpreter -c "from __future__ import print_function; import sys, os, stat; print(os.stat(sys.argv[1])[stat.ST_MTIME])" "${path}"
             ;;
     esac
 }
@@ -433,10 +433,11 @@ pty_helper_settings () {
 in_proper_context () {
     local command="${1}"
     local force_sudo_password="${2:-FALSE}"
-    local cmdline=()
+    # shellcheck disable=SC2016
+    local cmdline=('PYTHON_INTERPRETER=$(command -v python3) || PYTHON_INTERPRETER=$(command -v python2);')
 
     if is_true "${SUDO}"; then
-        cmdline+=("$(pty_helper_settings) python <(python -m base64 -d <<< $(pty_helper_script | gzip | base64_encode) | gunzip)")
+        cmdline+=("$(pty_helper_settings) \"\${PYTHON_INTERPRETER}\" <(\"\${PYTHON_INTERPRETER}\" -m base64 -d <<< $(pty_helper_script | gzip | base64_encode) | gunzip)")
 
         if ! is_true "${force_sudo_password}" && is_true "${SUDO_PASSWORDLESS}"; then
             cmdline+=("--sudo-passwordless")
@@ -574,7 +575,7 @@ base64_encode () {
     elif cmd_is_available openssl; then
         openssl base64 -A
     else
-        python -c 'from __future__ import unicode_literals, print_function; import sys; import base64; stdout = sys.stdout.buffer.write if hasattr(sys.stdout, "buffer") else sys.stdout.write; stdin = sys.stdin.buffer.read if hasattr(sys.stdin, "buffer") else sys.stdin.read; list(filter(None, (stdout(base64.b64encode(i)) for i in iter(lambda: stdin(3072), b""))))'
+        python_interpreter -c 'from __future__ import unicode_literals, print_function; import sys; import base64; stdout = sys.stdout.buffer.write if hasattr(sys.stdout, "buffer") else sys.stdout.write; stdin = sys.stdin.buffer.read if hasattr(sys.stdin, "buffer") else sys.stdin.read; list(filter(None, (stdout(base64.b64encode(i)) for i in iter(lambda: stdin(3072), b""))))'
     fi
 
     printf '\n'
@@ -586,6 +587,14 @@ base64_decode () {
     elif cmd_is_available openssl; then
         openssl base64 -d -A
     else
-        python -c 'from __future__ import unicode_literals, print_function; import sys; import base64; stdout = sys.stdout.buffer.write if hasattr(sys.stdout, "buffer") else sys.stdout.write; stdin = sys.stdin.buffer.read if hasattr(sys.stdin, "buffer") else sys.stdin.read; list(filter(None, (stdout(base64.b64decode(i)) for i in iter(lambda: stdin(3072), b""))))'
+        python_interpreter -c 'from __future__ import unicode_literals, print_function; import sys; import base64; stdout = sys.stdout.buffer.write if hasattr(sys.stdout, "buffer") else sys.stdout.write; stdin = sys.stdin.buffer.read if hasattr(sys.stdin, "buffer") else sys.stdin.read; list(filter(None, (stdout(base64.b64decode(i)) for i in iter(lambda: stdin(3072), b""))))'
+    fi
+}
+
+python_interpreter () {
+    if cmd_is_available python3; then
+        python3 "${@}"
+    else
+        python2 "${@}"
     fi
 }

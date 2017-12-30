@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import unicode_literals
 import os
 import sys
 import pty
@@ -39,6 +40,7 @@ EXIT_TIMEOUT = int(os.environ['EXIT_TIMEOUT'])
 EXIT_SUDO_PASSWORD_NOT_ACCEPTED = int(os.environ['EXIT_SUDO_PASSWORD_NOT_ACCEPTED'])
 EXIT_SUDO_PASSWORD_REQUIRED = int(os.environ['EXIT_SUDO_PASSWORD_REQUIRED'])
 
+
 class Timeout(Exception):
     pass
 
@@ -47,7 +49,7 @@ def one_of(
         fd, string_list, timeout=DEFAULT_TIMEOUT,
         read_buffer_size=DEFAULT_READ_BUFFER_SIZE):
 
-    buffer = ''
+    buffer = b''
     longest_string_len = max([len(s) for s in string_list])
 
     start = time.time()
@@ -64,7 +66,7 @@ def one_of(
         if not chunk:
             continue
 
-        buffer = ''.join([buffer, chunk])
+        buffer = b''.join([buffer, chunk])
 
         for s in string_list:
             if s in buffer:
@@ -95,10 +97,10 @@ while True:
 
     sudo_pass_buffer.append(c)
 
-    if c == '\n':
+    if c == b'\n':
         break
 
-sudo_pass = ''.join(sudo_pass_buffer)
+sudo_pass = b''.join(sudo_pass_buffer)
 
 pid, child_pty = pty.fork()
 
@@ -127,16 +129,16 @@ attr[3] = attr[3] & ~termios.ECHO
 termios.tcsetattr(child_pty, termios.TCSANOW, attr)
 
 try:
-    s = one_of(child_pty, ['SUDO_PASSWORD_PROMPT:', 'SUDO_SUCCESS'])
-    if s == 'SUDO_PASSWORD_PROMPT:':
+    s = one_of(child_pty, [b'SUDO_PASSWORD_PROMPT:', b'SUDO_SUCCESS'])
+    if s == b'SUDO_PASSWORD_PROMPT:':
 
         if args.sudo_passwordless:
             sys.exit(EXIT_SUDO_PASSWORD_REQUIRED)
 
         os.write(child_pty, sudo_pass)
 
-        s = one_of(child_pty, ['SUDO_PASSWORD_PROMPT:', 'SUDO_SUCCESS'])
-        if s == 'SUDO_PASSWORD_PROMPT:':
+        s = one_of(child_pty, [b'SUDO_PASSWORD_PROMPT:', b'SUDO_SUCCESS'])
+        if s == b'SUDO_PASSWORD_PROMPT:':
             sys.exit(EXIT_SUDO_PASSWORD_NOT_ACCEPTED)
 except Timeout:
     sys.exit(EXIT_TIMEOUT)
