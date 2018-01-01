@@ -22,6 +22,8 @@ import pty
 import termios
 import time
 import argparse
+import fcntl
+
 
 parser = argparse.ArgumentParser(description='SUDO PTY helper')
 parser.add_argument('--sudo-passwordless', action='store_true', default=False)
@@ -84,6 +86,12 @@ fd0 = os.dup(STDIN)
 fd1 = os.dup(STDOUT)
 fd2 = os.dup(STDERR)
 
+# Open PTY before closing the standard descriptors.
+# Otherwise OS will assign one of the now unused standard
+# descriptor numbers causing it to be replaced in the
+# child process later.
+parent_fd, child_fd = pty.openpty()
+
 # Closing these will prevent Python script itself
 # from being able to output stuff onto STDOUT/STDERR
 os.close(STDIN)
@@ -102,10 +110,20 @@ while True:
 
 sudo_pass = b''.join(sudo_pass_buffer)
 
-pid, child_pty = pty.fork()
+pid = os.fork()
 
 if pid is 0:
-    # Attach child to saved standard descriptors
+    os.close(parent_fd)
+    os.setsid()
+    # Attach to the controlling terminal on the BSD
+    # systems
+    fcntl.ioctl(child_fd, termios.TIOCSCTTY)
+
+    # Attach to the controlling terminal on Linux
+    fd = os.open(os.ttyname(child_fd), os.O_RDWR)
+    os.close(fd)
+
+    # Replace the standard descriptors with the saved ones
     os.dup2(fd0, STDIN)
     os.dup2(fd1, STDOUT)
     os.dup2(fd2, STDERR)
@@ -113,7 +131,7 @@ if pid is 0:
     os.close(fd1)
     os.close(fd2)
 
-    os.execv('/usr/bin/sudo', [
+    os.execvp('sudo', [
         'sudo', '-p', 'SUDO_PASSWORD_PROMPT:',
         'bash', '-c', (
             'echo "SUDO_SUCCESS" >/dev/tty; '
@@ -123,21 +141,22 @@ if pid is 0:
                               os.environ['SUDO_UID_VARIABLE'], os.getuid(),
                               args.command)])
 
+os.close(child_fd)
 # Disable echo
-attr = termios.tcgetattr(child_pty)
+attr = termios.tcgetattr(parent_fd)
 attr[3] = attr[3] & ~termios.ECHO
-termios.tcsetattr(child_pty, termios.TCSANOW, attr)
+termios.tcsetattr(parent_fd, termios.TCSANOW, attr)
 
 try:
-    s = one_of(child_pty, [b'SUDO_PASSWORD_PROMPT:', b'SUDO_SUCCESS'])
+    s = one_of(parent_fd, [b'SUDO_PASSWORD_PROMPT:', b'SUDO_SUCCESS'])
     if s == b'SUDO_PASSWORD_PROMPT:':
 
         if args.sudo_passwordless:
             sys.exit(EXIT_SUDO_PASSWORD_REQUIRED)
 
-        os.write(child_pty, sudo_pass)
+        os.write(parent_fd, sudo_pass)
 
-        s = one_of(child_pty, [b'SUDO_PASSWORD_PROMPT:', b'SUDO_SUCCESS'])
+        s = one_of(parent_fd, [b'SUDO_PASSWORD_PROMPT:', b'SUDO_SUCCESS'])
         if s == b'SUDO_PASSWORD_PROMPT:':
             sys.exit(EXIT_SUDO_PASSWORD_NOT_ACCEPTED)
 except Timeout:
