@@ -123,6 +123,12 @@ if pid is 0:
     fd = os.open(os.ttyname(child_fd), os.O_RDWR)
     os.close(fd)
 
+    # Keep the controlling terminal file descriptor open
+    # after exec(). Some systems (OSX) will close it otherwise.
+    flags = fcntl.fcntl(child_fd, fcntl.F_GETFD)
+    flags &= ~fcntl.FD_CLOEXEC
+    fcntl.fcntl(child_fd, fcntl.F_SETFD, flags)
+
     # Replace the standard descriptors with the saved ones
     os.dup2(fd0, STDIN)
     os.dup2(fd1, STDOUT)
