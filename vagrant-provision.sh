@@ -4,10 +4,10 @@ set -euo pipefail
 
 declare -A hosts
 
-hosts[fedora.test]=192.168.50.2
-hosts[centos.test]=192.168.50.3
-hosts[ubuntu.test]=192.168.50.4
-hosts[freebsd.test]=192.168.50.5
+hosts[fedora]=192.168.50.2
+hosts[centos]=192.168.50.3
+hosts[ubuntu]=192.168.50.4
+hosts[freebsd]=192.168.50.5
 
 if grep -q CentOS /etc/redhat-release; then
     yum -y install wget
@@ -23,7 +23,7 @@ if [[ "$(firewall-cmd --state)" = 'running' ]]; then
 fi
 
 for host in "${!hosts[@]}"; do
-    printf '%s %s\n' "${hosts[$host]}" "$host" >>/etc/hosts
+    printf '%s %s %s\n' "${hosts[$host]}" "${host}.test" "$host" >>/etc/hosts
 done
 
 case "$(uname -s)" in
@@ -79,7 +79,7 @@ done
 cat "${dir%/}/"* >>/home/user/.ssh/authorized_keys
 EOF
 
-bash /usr/local/bin/pull-keys.sh "${!hosts[@]}" &>/var/log/pull-keys.log &
+bash /usr/local/bin/pull-keys.sh "${hosts[@]}" &>/var/log/pull-keys.log &
 
 (
     cd /tmp/code
