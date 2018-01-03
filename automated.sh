@@ -224,8 +224,12 @@ EOF
 EOF
         cat
     else
-        printf '%s\n' "${command}"
-        printf "msg_debug 'done'\n"
+        cat <<EOF
+{
+    ${command}
+    msg_debug 'done'
+}
+EOF
     fi
 }
 
