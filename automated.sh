@@ -209,7 +209,14 @@ EOF
 
     # This block has to be the last block in the script as it
     # joins the STDIN of this script to the STDIN of the executed command
-    if [[ -p /dev/stdin ]]; then
+    if [[ -t 0 ]]; then
+        cat <<EOF
+{
+    ${command}
+    msg_debug 'done'
+}
+EOF
+    else
         cat <<EOF
 {
     ${command}
@@ -223,13 +230,6 @@ EOF
 } < <(cat)
 EOF
         cat
-    else
-        cat <<EOF
-{
-    ${command}
-    msg_debug 'done'
-}
-EOF
     fi
 }
 
