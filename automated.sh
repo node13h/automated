@@ -207,9 +207,26 @@ EOF
         done
     fi
 
-    printf '%s\n' "${command}"
+    # This block has to be the last block in the script as it
+    # joins the STDIN of this script to the STDIN of the executed command
+    if [[ -p /dev/stdin ]]; then
+        cat <<EOF
+{
+    ${command}
+    msg_debug 'done'
 
-    printf 'msg_debug "%s"' 'done'
+    # exit() is required so we don't try to execute the STDIN in case
+    # no one has consumed it.
+    # Exit code is always zero if we've got to this point (set -e in effect)
+    exit 0
+
+} < <(cat)
+EOF
+        cat
+    else
+        printf '%s\n' "${command}"
+        printf "msg_debug 'done'\n"
+    fi
 }
 
 
