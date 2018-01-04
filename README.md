@@ -1,18 +1,18 @@
 # automated - Run commands remotely
 
-This automation framework will enable you to run commands (including locally defined Bash functions) remotely. Remote SUDO (with or without password) before running commands is supported.
+This automation framework will enable you to run commands (including locally defined Bash functions) remotely.
 
 ![Demo](demo.gif)
 
 
 ## Features
-- **SUDO support**. Use the `-s` argument to run a remote command as SUDO root.
+- **SUDO support**. Use the `-s` argument to run a command on remote targets as SUDO root.
 
 - **Simple, yet powerful API**. Commands running via automated.sh have access to all functions defined in [libautomated.sh](libautomated.sh).
 
-- **Running functions from libraries remotely**. With SUDO. Load any number of extra files with the `-l` argument.
+- **Running functions from libraries remotely**. Load any number of extra files with the `-l` argument.
 
-- **STDIN, STDOUT and STDERR are transparently attached to the remotely running command**. Including commands run with SUDO. Yes, you can do this:
+- **STDIN, STDOUT and STDERR are transparently attached to the remotely running command**. Yes, you can do this:
 
   ```bash
   # Save ping output both on target.example.com and local controlling workstation
