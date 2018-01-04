@@ -6,13 +6,13 @@ This automation framework will enable you to run commands (including locally def
 
 
 ## Features
-- SUDO support. Use the `-s` argument to run a remote command as SUDO root.
+- **SUDO support**. Use the `-s` argument to run a remote command as SUDO root.
 
-- Simple, yet powerful API. Commands running via automated.sh have access to all functions defined in [libautomated.sh](libautomated.sh).
+- **Simple, yet powerful API**. Commands running via automated.sh have access to all functions defined in [libautomated.sh](libautomated.sh).
 
-- Running functions from libraries remotely. With SUDO. Load any number of extra files with the `-l` argument.
+- **Running functions from libraries remotely**. With SUDO. Load any number of extra files with the `-l` argument.
 
-- STDIN, STDOUT and STDERR are transparently attached to the remotely running command, including commands run with SUDO. Yes, yuo can do this:
+- **STDIN, STDOUT and STDERR are transparently attached to the remotely running command**. Including commands run with SUDO. Yes, you can do this:
 
   ```bash
   # Save ping output both on target.example.com and local controlling workstation
@@ -24,42 +24,42 @@ This automation framework will enable you to run commands (including locally def
   echo "I have travelled over the remote target back to the STDOUT on the controlling workstation" | automated.sh -c 'echo "Look, I am on STDERR" >&2; cat' target.example.com
   ```
 
-- Exit code of the remote command is retained. The following will output `5`:
+- **Exit code of the remote command is retained**. The following will output `5`:
 
   ```bash
   automated.sh -c 'exit 5' target.example.com; echo $?
   ```
 
-- Macro support. You can use macros to run locally generated code. Commands specified with the `-m` argument are evaluated locally and the output is executed remotely. The following is an example for unlocking the remote encrypted LUKS volumes on multiple remote machines using individual passwords from local [pass](https://www.passwordstore.org/) store:
+- **Macro support**. You can use macros to run locally generated code. Commands specified with the `-m` argument are evaluated locally and the output is executed remotely. The following is an example for unlocking the remote encrypted LUKS volumes on multiple remote machines using individual passwords from local [pass](https://www.passwordstore.org/) store:
 
   ```bash
   automated.sh -m 'printf "%s\n" "PASSPHRASE=$(pass "LUKS/${target}")"' -c 'cryptsetup luksOpen --key-file <(printf "%s" "$PASSPHRASE") /dev/vg0/encrypted decrypted' target1.example.com target2.example.com
   ```
 
-- Commands can be run in remote terminal multiplexer session. Safe OS updates over flaky SSH connections:
+- **Commands can be run in remote terminal multiplexer session**. Safe OS updates over flaky SSH connections:
 
   ```bash
   automated.sh -s -c 'run_in_multiplexer "yum -y update; exit"' centos.test
   ```
   Take a look at the [OS script from the ops-scripts repository](https://github.com/node13h/ops-scripts/blob/master/scripts/OS) for an extended version of this example.
 
-- Fact support. Some factos about the target systems are available via FACT_* variables. Take a look at some built-in facts:
+- **Fact support**. Some facts about the target systems are available via FACT\_\* variables. Take a look at some built-in facts:
 
   ```bash
   automated.sh -c 'set | grep ^FACT_' target.example.com
   ```
 
-- File upload support. Use `--cp` or `--cp-list` aruments to copy files from the controlling workstation to the remote targets. Use `--drag` argument and `drop()` function if you want to calculate destination filename during runtime on every target individually. The following example uses facts to decide where to decide where to put the certificate:
+- **File upload support**. Use `--cp` or `--cp-list` aruments to copy files from the controlling workstation to the remote targets. Use `--drag` argument and `drop()` function if you want to calculate destination filename during runtime on every target individually. The following example uses facts to decide where to decide where to put the certificate:
 
   ```bash
   automated.sh --drag CA.crt ca_cert_file -c 'drop ca_cert_file "${FACT_PKI_CERTS}/CA.crt"' target.example.com
   ```
 
-- Nothing is written on the remote targets unless you do that explicitly. All commands are executed on the fly, no temporary files are created.
+- **Zero remote footprint**. Nothing is written on the remote targets unless you do that explicitly. All commands are executed on the fly, no temporary files are created.
 
-- Minimal number of dependencies (Python is required on target systems for SUDO functionality)
+- **Minimal number of dependencies**. SUDO functionality and some API functions depend on Python 2.7 or later (including 3.x).
 
-- Local mode. Specify `--local` as a target to run commands directly on local system, bypassing the SSH. For example:
+- **Local mode**. Specify `--local` as a target to run commands directly on local system, bypassing the SSH. For example:
   ```bash
   automated.sh -s -c 'id' --local
   ```
@@ -119,7 +119,7 @@ my_script.sh centos.test ubuntu.test fedora.test freebsd.test
 
 ## Supported systems
 
-Any *NIX system with Bash version 4 or later should work. SUDO functionality and some API functions depend on Python 2.7 or later (version 3 is supported as well).
+Any *NIX system with Bash version 4 or later should work. SUDO PTY handling and file descriptor magic on targets is done by the helper Python script.
 
 The following systems were confirmed to work both as controlling workstation and remote targets
 
