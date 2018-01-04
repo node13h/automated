@@ -104,7 +104,7 @@ if [[ -n "${BASH_SOURCE[0]:-}" && "${0}" = "${BASH_SOURCE[0]}" ]]; then
 fi
 
 print_message () {
-    echo "Hello World from $(whoami)@$(uname -n). ${ADMIN} controls me"
+    echo "Hello World from $(whoami)@$(uname -n). ${ADMIN} controls me" | colorized 94
 }
 
 main () {
