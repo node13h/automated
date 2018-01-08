@@ -16,12 +16,12 @@ This automation framework will enable you to run commands (including locally def
 
   ```bash
   # Save ping output both on target.example.com and local controlling workstation
-  ping -c10 www.google.com | automated.sh -s -c 'tee /tmp/test.txt' target.example.com | tee /tmp/test.txt
+  ping -c10 www.google.com | automated.sh -s --stdin -c 'tee /tmp/test.txt' target.example.com | tee /tmp/test.txt
   ```
   and this:
 
   ```bash
-  echo "I have travelled over the remote target back to the STDOUT on the controlling workstation" | automated.sh -c 'echo "Look, I am on STDERR" >&2; cat' target.example.com
+  echo "I have travelled over the remote target back to the STDOUT on the controlling workstation" | automated.sh --stdin -c 'echo "Look, I am on STDERR" >&2; cat' target.example.com
   ```
 
 - **Exit code of the remote command is retained**. The following will output `5`:

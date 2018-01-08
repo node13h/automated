@@ -36,6 +36,7 @@ IGNORE_FAILED=FALSE
 DUMP_SCRIPT=FALSE
 AUTOLOAD_FACTS=TRUE
 PREFIX_TARGET_OUTPUT=FALSE
+PASS_STDIN=FALSE
 
 CMD='main'
 
@@ -76,6 +77,8 @@ OPTIONS:
   -l, --load PATH             Load file at specified PATH before calling
                               the command; in case PATH is a directory -
                               load *.sh from it. Can be specified multiple times.
+  --stdin                     Pass the STDIN of this script to the remote
+                              command. Disabled by default.
   --cp LOCAL-SRC-FILE REMOTE-DST-FILE
                               Copy local file to the target(s).
                               Can be specified multiple times.
@@ -209,14 +212,7 @@ EOF
 
     # This block has to be the last block in the script as it
     # joins the STDIN of this script to the STDIN of the executed command
-    if [[ -t 0 ]]; then
-        cat <<EOF
-{
-    ${command}
-    msg_debug 'done'
-}
-EOF
-    else
+    if is_true "${PASS_STDIN}"; then
         cat <<EOF
 {
     ${command}
@@ -230,6 +226,13 @@ EOF
 } < <(cat)
 EOF
         cat
+    else
+        cat <<EOF
+{
+    ${command}
+    msg_debug 'done'
+}
+EOF
     fi
 }
 
@@ -377,6 +380,10 @@ main () {
             --tmux-sock-prefix)
                 TMUX_SOCK_PREFIX="${2}"
                 shift
+                ;;
+
+            --stdin)
+                PASS_STDIN=TRUE
                 ;;
 
             --cp)
