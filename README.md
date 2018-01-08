@@ -7,15 +7,19 @@ This automation framework will enable you to run commands (including locally def
 
 ## Features
 - **SUDO support**
+
   Use the `-s` argument to run a command on remote targets as SUDO root.
 
 - **Simple, yet powerful API**
+
   Commands running via automated.sh have access to all functions defined in [libautomated.sh](libautomated.sh).
 
 - **Running functions from local libraries remotely**
+
   Load any number of extra files with the `-l` argument.
 
 - **STDIN, STDOUT and STDERR are transparently attached to the remotely running command**
+
   Yes, you can do this:
 
   ```bash
@@ -29,6 +33,7 @@ This automation framework will enable you to run commands (including locally def
   ```
 
 - **Exit code of the remote command is retained**
+
   The following will output `5`:
 
   ```bash
@@ -36,6 +41,7 @@ This automation framework will enable you to run commands (including locally def
   ```
 
 - **Macro support**
+
   You can use macros to run dynamically generated code. Commands specified with the `-m` argument are evaluated locally and the output is executed remotely. The following is an example for unlocking the remote encrypted LUKS volumes on multiple remote machines using individual passwords for every target from local [pass](https://www.passwordstore.org/) store:
 
   ```bash
@@ -43,6 +49,7 @@ This automation framework will enable you to run commands (including locally def
   ```
 
 - **Commands can be run in remote terminal multiplexer session**
+
   Safe OS updates over flaky SSH connections:
 
   ```bash
@@ -53,6 +60,7 @@ This automation framework will enable you to run commands (including locally def
   Take a look at the [OS script from the ops-scripts repository](https://github.com/node13h/ops-scripts/blob/master/scripts/OS) for an extended version of this example.
 
 - **Fact support**
+
   Some facts about the target systems are available via FACT\_\* variables. Take a look at built-in facts:
 
   ```bash
@@ -60,6 +68,7 @@ This automation framework will enable you to run commands (including locally def
   ```
 
 - **File upload support**
+
   Use `--cp` or `--cp-list` arguments to copy files from the controlling workstation to the remote targets. Use `--drag` argument and `drop()` function if you want to calculate destination filename during runtime on every target individually. The following example uses facts to decide decide where to put the certificate:
 
   ```bash
@@ -67,12 +76,15 @@ This automation framework will enable you to run commands (including locally def
   ```
 
 - **Zero remote footprint**
+
   Nothing is written on the remote targets unless you do that explicitly. All commands are executed on the fly, no temporary files are created.
 
 - **Minimal number of dependencies**
+
   SUDO functionality and some API functions depend on Python 2.7 or later (including 3.x).
 
 - **Local mode**
+
   Specify `--local` as a target to run commands directly on local system, bypassing the SSH. For example:
 
   ```bash
