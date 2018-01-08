@@ -308,9 +308,10 @@ execute () {
             msg "Timeout while connecting to ${target}"
             ;;
 
-        "${EXIT_MULTIPLEXER_ALREADY_RUNNING}")
+        "${EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX}")
             msg "Terminal multiplexer appears to be already running. Attaching ..."
             do_attach=TRUE
+            multiplexer='tmux'
             ;;
 
         "${EXIT_RUNNING_IN_TMUX}")

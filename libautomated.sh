@@ -31,7 +31,7 @@ EXIT_SUDO_PASSWORD_NOT_ACCEPTED=66
 EXIT_SUDO_PASSWORD_REQUIRED=67
 EXIT_RUNNING_IN_TMUX=68
 # TODO EXIT_RUNNING_IN_SCREEN=69
-EXIT_MULTIPLEXER_ALREADY_RUNNING=70
+EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX=70
 
 SUPPORTED_MULTIPLEXERS=(tmux)
 
@@ -308,7 +308,7 @@ run_in_multiplexer () {
         tmux)
             if tmux_command ls 2>/dev/null | to_debug; then
                 msg_debug "Multiplexer is already running"
-                exit "${EXIT_MULTIPLEXER_ALREADY_RUNNING}"
+                exit "${EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX}"
             else
                 msg_debug "Starting multiplexer and sending commands"
                 tmux_command new-session -d
