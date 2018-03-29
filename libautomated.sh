@@ -355,6 +355,25 @@ interactive_secret () {
     interactive_answer "${@}"
 }
 
+confirm () {
+    local target="${1}"
+    local prompt="${2}"
+    local default_value="${3:-N}"
+
+    local answer
+
+    while true; do
+        answer=$(interactive_answer "${target}" "${prompt} Y/N?" "${default_value}")
+
+        case "${answer}" in
+            [yY]) return 0
+                  ;;
+            [nN]) return 1
+                  ;;
+        esac
+    done
+}
+
 ask_sudo_password () {
     local sudo_password
 
