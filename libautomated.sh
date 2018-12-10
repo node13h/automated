@@ -87,7 +87,7 @@ translated () {
     while [[ "${#}" -gt 1 ]]; do
         a="${1}"
         b="${2}"
-        str="${str//${a}/${b}}"
+        str="${str//"${a}"/"${b}"}"
 
         shift 2
     done
