@@ -99,7 +99,7 @@ sed_replacement () {
     local str="${1}"
 
     # shellcheck disable=SC1003
-    printf '%s\n' "$(translated "${str}" '\' '\\' '/' '\/' '&' '\&' $'\n' '\n')"
+    translated "${str}" '\' '\\' '/' '\/' '&' '\&' $'\n' '\n'
 }
 
 colorized () {
