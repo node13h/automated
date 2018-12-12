@@ -19,14 +19,15 @@
 
 set -euo pipefail
 
-# shellcheck disable=SC1091
-source automated-config.sh
-# shellcheck disable=SC1090
+AUTOMATED_PROG=$(basename "${BASH_SOURCE[0]:-}")
+AUTOMATED_PROG_DIR=$(dirname "${BASH_SOURCE[0]:-}")
+
+# shellcheck source=automated-config.sh
+source "${AUTOMATED_PROG_DIR%/}/automated-config.sh"
+# shellcheck source=libautomated.sh
 source "${AUTOMATED_LIBDIR%/}/libautomated.sh"
 
 # TODO Throw error on unsupported systems (CentOS5, perhaps Ubuntu 10.04)
-
-PROG=$(basename "${BASH_SOURCE:-}")
 
 FACTDIR="${AUTOMATED_LIBDIR%/}/facts"
 
@@ -50,7 +51,7 @@ MACROS=()
 
 usage () {
     cat <<EOF
-Usage: ${PROG} [OPTIONS] [[TARGET] ...]
+Usage: ${AUTOMATED_PROG} [OPTIONS] [[TARGET] ...]
 
 Runs commands on local host or one or more remote targets.
 
