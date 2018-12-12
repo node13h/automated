@@ -16,7 +16,7 @@ clean:
 	rm -f automated-config.sh
 	rm -rf bdist sdist
 
-automated-config.sh:
+automated-config.sh: automated-config.sh.in VERSION
 	sed -e 's~@LIBDIR@~$(LIBDIR)/automated~g' \
 	    -e 's~@VERSION@~$(VERSION)~g' automated-config.sh.in >automated-config.sh
 
