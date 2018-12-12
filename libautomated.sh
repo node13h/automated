@@ -617,3 +617,39 @@ python_interpreter () {
         python2 "${@}"
     fi
 }
+
+supported_automated_versions () {
+    declare -r SEMVER_RE='^([0-9]+).([0-9]+).([0-9]+)(-([0-9A-Za-z.-]+))?(\+([0-9A-Za-z.-]))?$'
+    declare -r VER_RE='^([0-9]+)(.([0-9]+))?(.([0-9]+))?$'
+
+    [[ "$AUTOMATED_VERSION" =~ $SEMVER_RE ]]
+
+    declare automated_major="${BASH_REMATCH[1]}"
+    declare automated_minor="${BASH_REMATCH[2]}"
+    declare automated_patch="${BASH_REMATCH[3]}"
+
+    declare version match
+
+    for version in "$@"; do
+
+        match=1
+
+        [[ "$version" =~ $VER_RE ]]
+
+        [[ "$automated_major" -eq "${BASH_REMATCH[1]}" ]] || match=0
+
+        if [[ -n "${BASH_REMATCH[3]:+x}" ]]; then
+            [[ "$automated_minor" -eq "${BASH_REMATCH[3]}" ]] || match=0
+        fi
+
+        if [[ -n "${BASH_REMATCH[5]:+x}" ]]; then
+            [[ "$automated_patch" -eq "${BASH_REMATCH[5]}" ]] || match=0
+        fi
+
+        if [[ "$match" -eq 1 ]]; then
+            return 0
+        fi
+    done
+
+    return 1
+}

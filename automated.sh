@@ -165,6 +165,8 @@ EOF
     printf 'TMUX_SOCK_PREFIX=%s\n' "$(quoted "${TMUX_SOCK_PREFIX}")"
     printf 'CURRENT_TARGET=%s\n' "$(quoted "${target}")"
 
+    declared_var AUTOMATED_VERSION
+
     if [[ "${#EXPORT_VARS[@]}" -gt 0 ]]; then
         for var in "${EXPORT_VARS[@]}"; do
             declared_var "${var}"
