@@ -1,5 +1,6 @@
+SHELL = bash
+
 VERSION := $(shell cat VERSION)
-RELEASE_BRANCH := master
 
 PREFIX := /usr/local
 BINDIR = $(PREFIX)/bin
@@ -7,6 +8,9 @@ LIBDIR = $(PREFIX)/lib
 SHAREDIR = $(PREFIX)/share
 DOCSDIR = $(SHAREDIR)/doc
 MANDIR = $(SHAREDIR)/man
+
+SDIST_TARBALL := sdist/automated-$(VERSION).tar.gz
+SDIST_DIR = automated-$(VERSION)
 
 .PHONY: install build clean uninstall release sdist rpm
 
@@ -42,9 +46,16 @@ uninstall:
 release:
 	git tag $(VERSION)
 
-sdist:
+$(SDIST_TARBALL):
 	mkdir -p sdist; \
-	git archive "--prefix=automated-$(VERSION)/" -o "sdist/automated-$(VERSION).tar.gz" "$(VERSION)"
+	tar --transform "s/^/$(SDIST_DIR)\//" \
+	    --exclude .git \
+	    --exclude sdist \
+	    --exclude bdist \
+	    -czf $(SDIST_TARBALL) \
+	    *
+
+sdist: $(SDIST_TARBALL)
 
 rpm: PREFIX := /usr
 rpm: sdist
