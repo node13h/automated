@@ -4,9 +4,16 @@ PROJECT := automated
 
 SEMVER_RE := ^([0-9]+.[0-9]+.[0-9]+)(-([0-9A-Za-z.-]+))?(\+([0-9A-Za-z.-]))?$
 VERSION := $(shell cat VERSION)
+VERSION_PRE := $(shell [[ "$(VERSION)" =~ $(SEMVER_RE) ]] && printf '%s\n' "$${BASH_REMATCH[3]:-}")
 
 PKG_VERSION := $(shell [[ "$(VERSION)" =~ $(SEMVER_RE) ]] && printf '%s\n' "$${BASH_REMATCH[1]}")
+ifdef VERSION_PRE
+PKG_RELEASE := 1.$(VERSION_PRE)
+else
+PKG_RELEASE := 1
+endif
 
+BINTRAY_RPM_PATH := alikov/rpm/$(PROJECT)/$(PKG_VERSION)
 BINTRAY_DEB_PATH := alikov/deb/$(PROJECT)/$(PKG_VERSION)
 
 PREFIX := /usr/local
@@ -18,9 +25,11 @@ MANDIR = $(SHAREDIR)/man
 
 SDIST_TARBALL := sdist/$(PROJECT)-$(VERSION).tar.gz
 SDIST_DIR = $(PROJECT)-$(VERSION)
+SPEC_FILE := $(PROJECT).spec
+RPM_PACKAGE := bdist/noarch/$(PROJECT)-$(PKG_VERSION)-$(PKG_RELEASE).noarch.rpm
 DEB_PACKAGE := bdist/$(PROJECT)_$(VERSION)_all.deb
 
-.PHONY: install build clean uninstall release sdist rpm
+.PHONY: install build clean uninstall release sdist rpm publish-rpm deb publish-deb publish
 
 all: build
 
@@ -66,23 +75,24 @@ $(SDIST_TARBALL):
 
 sdist: $(SDIST_TARBALL)
 
-rpm: PREFIX := /usr
-rpm: sdist
+$(RPM_PACKAGE): PREFIX := /usr
+$(RPM_PACKAGE): $(SDIST_TARBALL)
 	mkdir -p bdist; \
-	rpm_version=$$(cut -f 1 -d '-' <<< "$(VERSION)"); \
-	rpm_release=$$(cut -s -f 2 -d '-' <<< "$(VERSION)"); \
-	sourcedir=$$(readlink -f sdist); \
-	rpmbuild -ba "automated.spec" \
-		--define "rpm_version $${rpm_version}" \
-		--define "rpm_release $${rpm_release:-1}" \
-		--define "full_version $(VERSION)" \
-		--define "prefix $(PREFIX)" \
-		--define "_srcrpmdir sdist/" \
-		--define "_rpmdir bdist/" \
-		--define "_sourcedir $${sourcedir}" \
-		--define "_bindir $(BINDIR)" \
-		--define "_libdir $(LIBDIR)" \
-		--define "_defaultdocdir $(DOCSDIR)"
+	rpmbuild -ba "$(SPEC_FILE)" \
+	  --define rpm_version\ $(PKG_VERSION) \
+	  --define rpm_release\ $(PKG_RELEASE) \
+	  --define sdist_dir\ $(SDIST_DIR) \
+	  --define sdist_tarball\ $(SDIST_TARBALL) \
+	  --define prefix\ $(PREFIX) \
+	  --define _srcrpmdir\ sdist/ \
+	  --define _rpmdir\ bdist/ \
+	  --define _sourcedir\ $(CURDIR)/sdist \
+	  --define _bindir\ $(BINDIR) \
+	  --define _libdir\ $(LIBDIR) \
+	  --define _defaultdocdir\ $(DOCSDIR) \
+	  --define _mandir\ $(MANDIR)
+
+rpm: $(RPM_PACKAGE)
 
 control: control.in VERSION
 	sed -e 's~@VERSION@~$(VERSION)~g' control.in >control
@@ -99,7 +109,10 @@ $(DEB_PACKAGE): control $(SDIST_TARBALL)
 
 deb: $(DEB_PACKAGE)
 
+publish-rpm: rpm
+	jfrog bt upload --publish=true $(RPM_PACKAGE) $(BINTRAY_RPM_PATH)
+
 publish-deb: deb
 	jfrog bt upload --publish=true --deb xenial/main/all $(DEB_PACKAGE) $(BINTRAY_DEB_PATH)
 
-publish: publish-deb
+publish: publish-rpm publish-deb
