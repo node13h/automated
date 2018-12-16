@@ -1,5 +1,6 @@
 *~
-automated-config.sh
-bdist/*
-sdist/*
-.vagrant/*
+/automated-config.sh
+/bdist/*
+/sdist/*
+/.vagrant/*
+/control

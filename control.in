@@ -1,0 +1,4 @@
+Package: automated
+Architecture: all
+Description: Run commands remotely
+Version: @VERSION@
