@@ -29,7 +29,7 @@ SPEC_FILE := $(PROJECT).spec
 RPM_PACKAGE := bdist/noarch/$(PROJECT)-$(PKG_VERSION)-$(PKG_RELEASE).noarch.rpm
 DEB_PACKAGE := bdist/$(PROJECT)_$(VERSION)_all.deb
 
-.PHONY: install build clean uninstall release sdist rpm publish-rpm deb publish-deb publish
+.PHONY: install build clean release-start release-finish uninstall release sdist rpm publish-rpm deb publish-deb publish
 
 all: build
 
@@ -60,8 +60,13 @@ uninstall:
 	rm -f -- $(DESTDIR)$(BINDIR)/automated-config.sh
 	rm -f -- $(DESTDIR)$(BINDIR)/automated.sh
 
-release:
-	git tag $(VERSION)
+release-start:
+	bash release.sh start
+
+release-finish:
+	bash release.sh finish
+
+release: release-start release-finish
 
 $(SDIST_TARBALL):
 	mkdir -p sdist; \
