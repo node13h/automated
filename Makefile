@@ -44,28 +44,28 @@ automated-config.sh: automated-config.sh.in VERSION
 build: automated-config.sh
 
 install: build
-	install -m 0755 -d "$(DESTDIR)$(BINDIR)"
-	install -m 0755 -d "$(DESTDIR)$(LIBDIR)/automated/facts"
-	install -m 0755 -d "$(DESTDIR)$(DOCSDIR)/automated"
-	install -m 0644 libautomated.sh "$(DESTDIR)$(LIBDIR)/automated"
-	install -m 0644 pty_helper.py "$(DESTDIR)$(LIBDIR)/automated"
-	install -m 0755 automated-config.sh "$(DESTDIR)$(BINDIR)"
-	install -m 0755 automated.sh "$(DESTDIR)$(BINDIR)"
-	install -m 0644 README.* "$(DESTDIR)$(DOCSDIR)/automated"
-	install -m 0644 facts/*.sh "$(DESTDIR)$(LIBDIR)/automated/facts"
+	install -m 0755 -d $(DESTDIR)$(BINDIR)
+	install -m 0755 -d $(DESTDIR)$(LIBDIR)/automated/facts
+	install -m 0755 -d $(DESTDIR)$(DOCSDIR)/automated
+	install -m 0644 libautomated.sh $(DESTDIR)$(LIBDIR)/automated
+	install -m 0644 pty_helper.py $(DESTDIR)$(LIBDIR)/automated
+	install -m 0755 automated-config.sh $(DESTDIR)$(BINDIR)
+	install -m 0755 automated.sh $(DESTDIR)$(BINDIR)
+	install -m 0644 README.* $(DESTDIR)$(DOCSDIR)/automated
+	install -m 0644 facts/*.sh $(DESTDIR)$(LIBDIR)/automated/facts
 
 uninstall:
-	rm -rf "$(DESTDIR)$(LIBDIR)/automated"
-	rm -rf "$(DESTDIR)$(DOCSDIR)/automated"
-	rm -f "$(DESTDIR)$(BINDIR)/automated-config.sh"
-	rm -f "$(DESTDIR)$(BINDIR)/automated.sh"
+	rm -rf -- $(DESTDIR)$(LIBDIR)/automated
+	rm -rf -- $(DESTDIR)$(DOCSDIR)/automated
+	rm -f -- $(DESTDIR)$(BINDIR)/automated-config.sh
+	rm -f -- $(DESTDIR)$(BINDIR)/automated.sh
 
 release:
 	git tag $(VERSION)
 
 $(SDIST_TARBALL):
 	mkdir -p sdist; \
-	tar --transform "s/^/$(SDIST_DIR)\//" \
+	tar --transform 's~^~$(SDIST_DIR)/~' \
 	    --exclude .git \
 	    --exclude sdist \
 	    --exclude bdist \
