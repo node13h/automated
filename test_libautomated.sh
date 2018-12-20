@@ -34,7 +34,7 @@ source "${PROG_DIR%/}/libautomated.sh"
 
 
 test_file_as_function_file () {
-    declare temp_file temp_file_quoted owner mode
+    declare rc temp_file temp_file_quoted owner mode
     temp_file=$(mktemp)
 
     set +e
@@ -64,9 +64,12 @@ drop_85f3735d27bcffbd74d4d5b092e52da0_owner () {
 }
 EOF
     )
+    rc="$?"
     set -e
 
     rm -f -- "$temp_file"
+
+    return "$rc"
 }
 
 test_file_as_function_pipe () {
@@ -99,7 +102,7 @@ EOF
 }
 
 test_file_as_function_dir_fail () {
-    declare temp_dir
+    declare rc temp_dir
     temp_dir=$(mktemp -d)
     temp_dir_quoted=$(printf '%q' "$temp_dir")
 
@@ -108,9 +111,12 @@ test_file_as_function_dir_fail () {
         set -e
         assert_fail "file_as_function ${temp_dir_quoted} my-file-id 2>/dev/null"
     )
+    rc="$?"
     set -e
 
     rmdir -- "$temp_dir"
+
+    return "$rc"
 }
 
 test_drop_stdout () {
@@ -137,7 +143,7 @@ EOF
 }
 
 test_drop_file () {
-    declare temp_dir dst_quoted
+    declare rc temp_dir dst_quoted
     temp_dir=$(mktemp -d)
     dst_quoted=$(printf '%q' "${temp_dir%/}/dst")
 
@@ -167,9 +173,13 @@ EOF
         assert_stdout "stat -c '%#03a' ${dst_quoted}" <<< '0750'
 
     )
+    rc="$?"
     set -e
+
     rm -f -- "${temp_dir%/}/dst"
     rmdir -- "$temp_dir"
+
+    return "$rc"
 }
 
 test_drop_fail () {
@@ -177,7 +187,7 @@ test_drop_fail () {
 }
 
 test_file_as_code_file () {
-    declare temp_file temp_file_quoted mode
+    declare rc temp_file temp_file_quoted mode
     temp_file=$(mktemp)
 
     set +e
@@ -199,9 +209,12 @@ H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
 EOF-d075c6918aed70a32aaebbd10eb9ecab
 EOF
     )
+    rc="$?"
     set -e
 
     rm -f -- "$temp_file"
+
+    return "$rc"
 }
 
 test_file_code_pipe () {
