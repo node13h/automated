@@ -238,6 +238,22 @@ file_mode () {
     esac
 }
 
+file_owner () {
+    local path="${1}"
+
+    case "${LOCAL_KERNEL}" in
+        FreeBSD|OpenBSD|Darwin)
+            stat -f '%Su:%Sg' "${path}"
+            ;;
+        Linux)
+            stat -c "%U:%G" "${path}"
+            ;;
+        *)
+            python_interpreter -c "from __future__ import print_function; import sys, os, stat, pwd, grp; st = os.stat(sys.argv[1]); print('{}:{}'.format(pwd.getpwuid(st.st_uid)[0], grp.getgrgid(st.st_gid)[0]))" "${path}"
+            ;;
+    esac
+}
+
 file_mtime () {
     local path="${1}"
 
