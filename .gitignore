@@ -4,3 +4,4 @@
 /sdist/*
 /.vagrant/*
 /control
+/junit/*

@@ -238,6 +238,22 @@ file_mode () {
     esac
 }
 
+file_owner () {
+    local path="${1}"
+
+    case "${LOCAL_KERNEL}" in
+        FreeBSD|OpenBSD|Darwin)
+            stat -f '%Su:%Sg' "${path}"
+            ;;
+        Linux)
+            stat -c "%U:%G" "${path}"
+            ;;
+        *)
+            python_interpreter -c "from __future__ import print_function; import sys, os, stat, pwd, grp; st = os.stat(sys.argv[1]); print('{}:{}'.format(pwd.getpwuid(st.st_uid)[0], grp.getgrgid(st.st_gid)[0]))" "${path}"
+            ;;
+    esac
+}
+
 file_mtime () {
     local path="${1}"
 
@@ -494,65 +510,84 @@ file_as_code () {
     ! [[ -d "${src}" ]] || throw "${src} is a directory. Directories are not supported"
 
     mode=$(file_mode "${src}")
-    # Not copying owner information intentionally
 
     boundary="EOF-$(md5 <<< "${dst}")"
 
     cat <<EOF
 touch $(quoted "${dst}")
-chmod ${mode} $(quoted "${dst}")
+chmod 0600 $(quoted "${dst}")
 base64_decode <<"${boundary}" | gzip -d >$(quoted "${dst}")
+chmod ${mode} $(quoted "${dst}")
 EOF
 
-    gzip -c "${src}" | base64_encode
+    gzip -n -6 - <"${src}" | base64_encode
 
     cat <<EOF
 ${boundary}
 EOF
 }
 
-drop_fn_name () {
-    local file_id="${1}"
+is_function () {
+    local name="${1}"
 
-    printf 'drop_%s\n' "$(md5 <<< "${file_id}")"
+    [[ "$(type -t "${name}")" = 'function' ]]
 }
 
 drop () {
     local file_id="${1}"
-    local dst="${2}"
-    local mode="${3:-}"
+    local dst="${2:-}"
 
-    # shellcheck disable=SC2091
-    "$(drop_fn_name "${file_id}")" "${dst}" "${mode}"
+    local file_id_hash original_mode
+
+    file_id_hash=$(md5 <<< "${file_id}")
+
+    is_function "drop_${file_id_hash}_body" || throw "File id ${file_id} is not dragged"
+
+    if [[ -n "${dst}" ]]; then
+        original_mode=$("drop_${file_id_hash}_mode")
+
+        local mode="${3:-${original_mode}}"
+
+        touch "${dst}"
+        chmod 0600 "${dst}"
+
+        "drop_${file_id_hash}_body" "${file_id}" >"${dst}"
+
+        chmod "${mode}" "${dst}"
+    else
+        "drop_${file_id_hash}_body" "${file_id}"
+    fi
 }
 
 file_as_function () {
     local src="${1}"
     local file_id="${2}"
-    local mode boundary fn_name
+    local mode owner file_id_hash
 
     ! [[ -d "${src}" ]] || throw "${src} is a directory. Directories are not supported"
 
-    mode=$(file_mode "${src}")
-    # Not copying owner information intentionally
+    file_id_hash=$(md5 <<< "${file_id}")
 
-    boundary="EOF-$(md5 <<< "${file_id}")"
-    fn_name=$(drop_fn_name "${file_id}")
+    mode=$(file_mode "${src}")
+    owner=$(file_owner "${src}")
 
     cat <<EOF
-${fn_name} () {
-  local dst="\${1}"
-  local mode="\${2:-${mode}}"
-
-  touch "\${dst}"
-  chmod "\${mode}" "\${dst}"
-  base64_decode <<"${boundary}" | gzip -d >"\${dst}"
+drop_${file_id_hash}_body () {
+    base64_decode <<"EOF-${file_id_hash}" | gzip -d
 EOF
 
-    gzip -c "${src}" | base64_encode
+    gzip -n -6 - <"${src}" | base64_encode
 
     cat <<EOF
-${boundary}
+EOF-${file_id_hash}
+}
+
+drop_${file_id_hash}_mode () {
+    printf '%s\n' '${mode}'
+}
+
+drop_${file_id_hash}_owner () {
+    printf '%s\n' '${owner}'
 }
 EOF
 }

@@ -29,19 +29,22 @@ SPEC_FILE := $(PROJECT).spec
 RPM_PACKAGE := bdist/noarch/$(PROJECT)-$(PKG_VERSION)-$(PKG_RELEASE).noarch.rpm
 DEB_PACKAGE := bdist/$(PROJECT)_$(VERSION)_all.deb
 
-.PHONY: install build clean release-start release-finish uninstall release sdist rpm publish-rpm deb publish-deb publish
+.PHONY: install build clean test release-start release-finish uninstall release sdist rpm publish-rpm deb publish-deb publish
 
 all: build
 
 clean:
 	rm -f automated-config.sh
-	rm -rf bdist sdist
+	rm -rf bdist sdist junit
 
 automated-config.sh: automated-config.sh.in VERSION
 	sed -e 's~@LIBDIR@~$(LIBDIR)/automated~g' \
 	    -e 's~@VERSION@~$(VERSION)~g' automated-config.sh.in >automated-config.sh
 
-build: automated-config.sh
+test:
+	bash test_libautomated.sh
+
+build: automated-config.sh test
 
 install: build
 	install -m 0755 -d $(DESTDIR)$(BINDIR)
