@@ -513,7 +513,19 @@ file_as_code () {
     local dst="${2}"
     local mode boundary
 
-    ! [[ -d "${src}" ]] || throw "${src} is a directory. Directories are not supported"
+    if [[ -d "${src}" ]]; then
+        cat <<EOF
+throw $(quoted "${src} is a directory. directories are not supported")
+EOF
+        return 1
+    fi
+
+    if ! [[ -r "${src}" ]]; then
+        cat <<EOF
+throw $(quoted "${src} was not readable at the moment of the shipping attempt")
+EOF
+        return 1
+    fi
 
     mode=$(file_mode "${src}")
 
@@ -530,6 +542,8 @@ EOF
 
     cat <<EOF
 ${boundary}
+
+msg_debug $(quoted "copied ${src} to ${dst} on the target")
 EOF
 }
 
@@ -565,12 +579,25 @@ drop () {
     fi
 }
 
+
 file_as_function () {
     local src="${1}"
-    local file_id="${2}"
+    local file_id="${2:-"${src}"}"
     local mode owner file_id_hash
 
-    ! [[ -d "${src}" ]] || throw "${src} is a directory. Directories are not supported"
+    if [[ -d "${src}" ]]; then
+        cat <<EOF
+throw $(quoted "${src} is a directory. directories are not supported")
+EOF
+        return 1
+    fi
+
+    if ! [[ -r "${src}" ]]; then
+        cat <<EOF
+throw $(quoted "${src} was not readable at the moment of the shipping attempt")
+EOF
+        return 1
+    fi
 
     file_id_hash=$(md5 <<< "${file_id}")
 
@@ -595,6 +622,7 @@ drop_${file_id_hash}_mode () {
 drop_${file_id_hash}_owner () {
     printf '%s\n' '${owner}'
 }
+msg_debug $(quoted "shipped ${src} as the file id ${file_id}")
 EOF
 }
 
