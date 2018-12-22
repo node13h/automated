@@ -32,7 +32,6 @@ source shelter.sh
 # shellcheck disable=SC1090
 source "${PROG_DIR%/}/libautomated.sh"
 
-
 test_file_as_function_file () {
     declare rc temp_file temp_file_quoted owner mode
     temp_file=$(mktemp)
@@ -62,6 +61,48 @@ drop_85f3735d27bcffbd74d4d5b092e52da0_mode () {
 drop_85f3735d27bcffbd74d4d5b092e52da0_owner () {
     printf '%s\n' '${owner}'
 }
+msg_debug shipped\ ${temp_file_quoted}\ as\ the\ file\ id\ my-file-id
+EOF
+    )
+    rc="$?"
+    set -e
+
+    rm -f -- "$temp_file"
+
+    return "$rc"
+}
+
+test_file_as_function_id_defaults_to_path () {
+    declare rc temp_file temp_file_quoted name_md5 owner mode
+    temp_file=$(mktemp)
+
+    set +e
+    (
+        set -e
+        cat <<EOF >"$temp_file"
+Hello
+World
+EOF
+        owner=$(stat -c '%U:%G' "$temp_file")
+        mode=$(stat -c '%#03a' "$temp_file")
+        temp_file_quoted=$(printf '%q' "$temp_file")
+        name_md5=$(md5sum -b - <<< "$temp_file" | cut -f 1 -d ' ')
+
+        assert_stdout "file_as_function ${temp_file_quoted}" - <<EOF
+drop_${name_md5}_body () {
+    base64_decode <<"EOF-${name_md5}" | gzip -d
+H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
+EOF-${name_md5}
+}
+
+drop_${name_md5}_mode () {
+    printf '%s\n' '${mode}'
+}
+
+drop_${name_md5}_owner () {
+    printf '%s\n' '${owner}'
+}
+msg_debug shipped\ ${temp_file_quoted}\ as\ the\ file\ id\ ${temp_file_quoted}
 EOF
     )
     rc="$?"
@@ -93,6 +134,7 @@ drop_85f3735d27bcffbd74d4d5b092e52da0_mode () {
 drop_85f3735d27bcffbd74d4d5b092e52da0_owner () {
     printf '%s\n' '${owner}'
 }
+msg_debug shipped\ /dev/fd/0\ as\ the\ file\ id\ my-file-id
 EOF
 )
     } <<EOF
@@ -104,17 +146,46 @@ EOF
 test_file_as_function_dir_fail () {
     declare rc temp_dir
     temp_dir=$(mktemp -d)
-    temp_dir_quoted=$(printf '%q' "$temp_dir")
 
     set +e
     (
         set -e
-        assert_fail "file_as_function ${temp_dir_quoted} my-file-id 2>/dev/null"
+
+        temp_dir_quoted=$(printf '%q' "$temp_dir")
+
+        assert_fail "file_as_function ${temp_dir_quoted} my-file-id >/dev/null"
+        assert_stdout "file_as_function ${temp_dir_quoted} my-file-id" - <<EOF
+throw ${temp_dir_quoted}\ is\ a\ directory.\ directories\ are\ not\ supported
+EOF
     )
     rc="$?"
     set -e
 
     rmdir -- "$temp_dir"
+
+    return "$rc"
+}
+
+test_file_as_function_unreadable () {
+    declare rc temp_file temp_file_quoted
+    temp_file=$(mktemp)
+
+    set +e
+    (
+        set -e
+
+        chmod 0000 "$temp_file"
+        temp_file_quoted=$(printf '%q' "$temp_file")
+
+        assert_fail "file_as_function ${temp_file_quoted} my-file-id >/dev/null"
+        assert_stdout "file_as_function ${temp_file_quoted} my-file-id" - <<EOF
+throw ${temp_file_quoted}\ was\ not\ readable\ at\ the\ moment\ of\ the\ shipping\ attempt
+EOF
+    )
+    rc="$?"
+    set -e
+
+    rm -f -- "$temp_file"
 
     return "$rc"
 }
@@ -145,11 +216,12 @@ EOF
 test_drop_file () {
     declare rc temp_dir dst_quoted
     temp_dir=$(mktemp -d)
-    dst_quoted=$(printf '%q' "${temp_dir%/}/dst")
 
     set +e
     (
         set -e
+
+        dst_quoted=$(printf '%q' "${temp_dir%/}/dst")
 
         drop_85f3735d27bcffbd74d4d5b092e52da0_body () {
             base64_decode <<"EOF-85f3735d27bcffbd74d4d5b092e52da0" | gzip -d
@@ -207,6 +279,8 @@ base64_decode <<"EOF-d075c6918aed70a32aaebbd10eb9ecab" | gzip -d >/tmp/dst
 chmod ${mode} /tmp/dst
 H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
 EOF-d075c6918aed70a32aaebbd10eb9ecab
+
+msg_debug copied\ ${temp_file_quoted}\ to\ /tmp/dst\ on\ the\ target
 EOF
     )
     rc="$?"
@@ -217,25 +291,74 @@ EOF
     return "$rc"
 }
 
-test_file_code_pipe () {
+test_file_as_code_pipe () {
     declare mode
 
     {
         mode=$(stat -c '%#03a' '/dev/fd/0')
 
-        assert_stdout "file_as_function /dev/fd/0 my-file-id" <(cat <<EOF
+        assert_stdout "file_as_code /dev/fd/0 /tmp/dst" <(cat <<EOF
 touch /tmp/dst
 chmod 0600 /tmp/dst
 base64_decode <<"EOF-d075c6918aed70a32aaebbd10eb9ecab" | gzip -d >/tmp/dst
 chmod ${mode} /tmp/dst
 H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
 EOF-d075c6918aed70a32aaebbd10eb9ecab
+
+msg_debug copied\ /dev/fd/0\ to\ /tmp/dst\ on\ the\ target
 EOF
 )
     } <<EOF
 Hello
 World
 EOF
+}
+
+test_file_as_code_dir_fail () {
+    declare rc temp_dir
+    temp_dir=$(mktemp -d)
+
+    set +e
+    (
+        set -e
+
+        temp_dir_quoted=$(printf '%q' "$temp_dir")
+
+        assert_fail "file_as_code ${temp_dir_quoted} /tmp/dst >/dev/null"
+        assert_stdout "file_as_code ${temp_dir_quoted} /tmp/dst" - <<EOF
+throw ${temp_dir_quoted}\ is\ a\ directory.\ directories\ are\ not\ supported
+EOF
+    )
+    rc="$?"
+    set -e
+
+    rmdir -- "$temp_dir"
+
+    return "$rc"
+}
+
+test_file_as_code_unreadable () {
+    declare rc temp_file temp_file_quoted
+    temp_file=$(mktemp)
+
+    set +e
+    (
+        set -e
+
+        chmod 0000 "$temp_file"
+        temp_file_quoted=$(printf '%q' "$temp_file")
+
+        assert_fail "file_as_code ${temp_file_quoted} /tmp/dst >/dev/null"
+        assert_stdout "file_as_code ${temp_file_quoted} /tmp/dst" - <<EOF
+throw ${temp_file_quoted}\ was\ not\ readable\ at\ the\ moment\ of\ the\ shipping\ attempt
+EOF
+    )
+    rc="$?"
+    set -e
+
+    rm -f -- "$temp_file"
+
+    return "$rc"
 }
 
 test_is_function_true () {
@@ -254,11 +377,35 @@ test_is_function_false () {
     )
 }
 
+test_sourced_drop_correct () {
+    assert_stdout 'sourced_drop my-file-id' - <<"EOF"
+is_function "drop_85f3735d27bcffbd74d4d5b092e52da0_body" || throw File\ id\ my-file-id\ is\ not\ dragged
+source <(drop_85f3735d27bcffbd74d4d5b092e52da0_body)
+msg_debug sourced\ file\ id\ my-file-id
+EOF
+}
+
+test_bootstrap_environment_correct () {
+    (
+        environment_script () {
+            cat <<EOF
+echo "environment for ${1}"
+EOF
+        }
+
+        assert_stdout 'source <(bootstrap_environment my-target)' - <<"EOF"
+environment for my-target
+EOF
+    )
+}
+
 suite () {
     shelter_run_test_class upload test_file_as_function_
     shelter_run_test_class upload test_drop_
     shelter_run_test_class upload test_file_as_code_
+    shelter_run_test_class upload test_sourced_drop_
     shelter_run_test_class utility test_is_function_
+    shelter_run_test_class utility test_bootstrap_environment_
 }
 
 usage () {

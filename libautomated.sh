@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-LOCAL_KERNEL=$(uname -s)
+set -euo pipefail
 
 DEBUG=FALSE
 DISABLE_COLOUR=FALSE
@@ -132,7 +132,7 @@ to_debug () {
     local colour="${1:-${ANSI_FG_YELLOW}}"
 
     if is_true "${DEBUG}"; then
-        colorized "${colour}" | to_stderr
+        colorized "${colour}" >&2
     else
         to_null
     fi
@@ -146,19 +146,22 @@ msg () {
     local msg="${1}"
     local colour="${2:-${ANSI_FG_WHITE}}"
 
-    printf '%s\n' "${msg}" | colorized "${colour}" | to_stderr
+    printf '%s\n' "${msg}" | colorized "${colour}" >&2
 }
 
 msg_debug () {
     local msg="${1}"
+    local colour="${2:-${ANSI_FG_YELLOW}}"
 
-    printf 'DEBUG %s\n' "${msg}" | to_debug
+    if is_true "${DEBUG}"; then
+        printf 'DEBUG %s\n' "${msg}" | colorized "${colour}" >&2
+    fi
 }
 
 throw () {
     local msg="${1}"
 
-    printf '%s\n' "${msg}" | to_stderr
+    printf '%s\n' "${msg}" >&2
     return 1
 }
 
@@ -222,10 +225,14 @@ readable_directory () {
     [[ -d "${1}" && -r "${1}" ]]
 }
 
+local_kernel () {
+    uname -s
+}
+
 file_mode () {
     local path="${1}"
 
-    case "${LOCAL_KERNEL}" in
+    case "$(local_kernel)" in
         FreeBSD|OpenBSD|Darwin)
             stat -f '%#Mp%03Lp' "${path}"
             ;;
@@ -241,7 +248,7 @@ file_mode () {
 file_owner () {
     local path="${1}"
 
-    case "${LOCAL_KERNEL}" in
+    case "$(local_kernel)" in
         FreeBSD|OpenBSD|Darwin)
             stat -f '%Su:%Sg' "${path}"
             ;;
@@ -257,7 +264,7 @@ file_owner () {
 file_mtime () {
     local path="${1}"
 
-    case "${LOCAL_KERNEL}" in
+    case "$(local_kernel)" in
         FreeBSD|OpenBSD|Darwin)
             stat -f '%Um' "${path}"
             ;;
@@ -484,30 +491,24 @@ in_proper_context () {
     printf '%s\n' "${cmdline[*]}"
 }
 
-loadable_files () {
-    local file_path load_path
-
-    [[ "${#}" -gt 0 ]] || return 0
-
-    for load_path in "${@}"; do
-        if readable_file "${load_path}"; then
-            printf '%s\n' "${load_path}"
-        elif readable_directory "${load_path}"; then
-            for file_path in "${load_path%/}/"*.sh; do
-                if readable_file "${file_path}"; then
-                    printf '%s\n' "${file_path}"
-                fi
-            done
-        fi
-    done
-}
-
 file_as_code () {
     local src="${1}"
     local dst="${2}"
     local mode boundary
 
-    ! [[ -d "${src}" ]] || throw "${src} is a directory. Directories are not supported"
+    if [[ -d "${src}" ]]; then
+        cat <<EOF
+throw $(quoted "${src} is a directory. directories are not supported")
+EOF
+        return 1
+    fi
+
+    if ! [[ -r "${src}" ]]; then
+        cat <<EOF
+throw $(quoted "${src} was not readable at the moment of the shipping attempt")
+EOF
+        return 1
+    fi
 
     mode=$(file_mode "${src}")
 
@@ -524,6 +525,8 @@ EOF
 
     cat <<EOF
 ${boundary}
+
+msg_debug $(quoted "copied ${src} to ${dst} on the target")
 EOF
 }
 
@@ -559,12 +562,25 @@ drop () {
     fi
 }
 
+
 file_as_function () {
     local src="${1}"
-    local file_id="${2}"
+    local file_id="${2:-"${src}"}"
     local mode owner file_id_hash
 
-    ! [[ -d "${src}" ]] || throw "${src} is a directory. Directories are not supported"
+    if [[ -d "${src}" ]]; then
+        cat <<EOF
+throw $(quoted "${src} is a directory. directories are not supported")
+EOF
+        return 1
+    fi
+
+    if ! [[ -r "${src}" ]]; then
+        cat <<EOF
+throw $(quoted "${src} was not readable at the moment of the shipping attempt")
+EOF
+        return 1
+    fi
 
     file_id_hash=$(md5 <<< "${file_id}")
 
@@ -589,6 +605,21 @@ drop_${file_id_hash}_mode () {
 drop_${file_id_hash}_owner () {
     printf '%s\n' '${owner}'
 }
+msg_debug $(quoted "shipped ${src} as the file id ${file_id}")
+EOF
+}
+
+sourced_drop () {
+    local file_id="${1}"
+
+    local file_id_hash
+
+    file_id_hash=$(md5 <<< "${file_id}")
+
+    cat <<EOF
+is_function "drop_${file_id_hash}_body" || throw $(quoted "File id ${file_id} is not dragged")
+source <(drop_${file_id_hash}_body)
+msg_debug $(quoted "sourced file id ${file_id}")
 EOF
 }
 
@@ -606,14 +637,6 @@ declared_function () {
     printf 'msg_debug "declared function %s"\n' "$(quoted "${fn}")"
 }
 
-sourced_file () {
-    local path="${1}"
-
-    cat "${path}"
-    newline
-    printf 'msg_debug "sourced %s"\n' "$(quoted "${path}")"
-}
-
 exit_after () {
     local exit_code="${1}"
     shift
@@ -624,7 +647,7 @@ exit_after () {
 }
 
 base64_encode () {
-    if [[ "${LOCAL_KERNEL}" = 'Linux' ]] && cmd_is_available base64; then
+    if [[ "$(local_kernel)" = 'Linux' ]] && cmd_is_available base64; then
         base64 -w 0
     elif cmd_is_available openssl; then
         openssl base64 -A
@@ -636,7 +659,7 @@ base64_encode () {
 }
 
 base64_decode () {
-    if [[ "${LOCAL_KERNEL}" = 'Linux' ]] && cmd_is_available base64; then
+    if [[ "$(local_kernel)" = 'Linux' ]] && cmd_is_available base64; then
         base64 -d
     elif cmd_is_available openssl; then
         openssl base64 -d -A
@@ -687,4 +710,30 @@ supported_automated_versions () {
     done
 
     return 1
+}
+
+bootstrap_environment () {
+    local target="${1}"
+
+    cat <<EOF
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+msg_debug () {
+    # Mock for the bootstrap envirnment
+    return 0
+}
+
+EOF
+    declared_function 'cmd_is_available'
+    declared_function 'python_interpreter'
+    declared_function 'local_kernel'
+    declared_function 'base64_decode'
+    declared_function 'is_function'
+    declared_function 'throw'
+
+    file_as_function <(environment_script "${target}") \
+                     '__automated_environment'
+    sourced_drop '__automated_environment'
 }
