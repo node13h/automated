@@ -132,7 +132,7 @@ to_debug () {
     local colour="${1:-${ANSI_FG_YELLOW}}"
 
     if is_true "${DEBUG}"; then
-        colorized "${colour}" | to_stderr
+        colorized "${colour}" >&2
     else
         to_null
     fi
@@ -146,19 +146,22 @@ msg () {
     local msg="${1}"
     local colour="${2:-${ANSI_FG_WHITE}}"
 
-    printf '%s\n' "${msg}" | colorized "${colour}" | to_stderr
+    printf '%s\n' "${msg}" | colorized "${colour}" >&2
 }
 
 msg_debug () {
     local msg="${1}"
+    local colour="${2:-${ANSI_FG_YELLOW}}"
 
-    printf 'DEBUG %s\n' "${msg}" | to_debug
+    if is_true "${DEBUG}"; then
+        printf 'DEBUG %s\n' "${msg}" | colorized "${colour}" >&2
+    fi
 }
 
 throw () {
     local msg="${1}"
 
-    printf '%s\n' "${msg}" | to_stderr
+    printf '%s\n' "${msg}" >&2
     return 1
 }
 
