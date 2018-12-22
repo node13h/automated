@@ -736,3 +736,29 @@ supported_automated_versions () {
 
     return 1
 }
+
+bootstrap_environment () {
+    local target="${1}"
+
+    cat <<EOF
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+msg_debug () {
+    # Mock for the bootstrap envirnment
+    return 0
+}
+
+EOF
+    declared_function 'cmd_is_available'
+    declared_function 'python_interpreter'
+    declared_function 'local_kernel'
+    declared_function 'base64_decode'
+    declared_function 'is_function'
+    declared_function 'throw'
+
+    file_as_function <(environment_script "${target}") \
+                     '__automated_environment'
+    sourced_drop '__automated_environment'
+}

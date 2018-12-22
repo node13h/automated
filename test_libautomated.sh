@@ -385,12 +385,27 @@ msg_debug sourced\ file\ id\ my-file-id
 EOF
 }
 
+test_bootstrap_environment_correct () {
+    (
+        environment_script () {
+            cat <<EOF
+echo "environment for ${1}"
+EOF
+        }
+
+        assert_stdout 'source <(bootstrap_environment my-target)' - <<"EOF"
+environment for my-target
+EOF
+    )
+}
+
 suite () {
     shelter_run_test_class upload test_file_as_function_
     shelter_run_test_class upload test_drop_
     shelter_run_test_class upload test_file_as_code_
     shelter_run_test_class upload test_sourced_drop_
     shelter_run_test_class utility test_is_function_
+    shelter_run_test_class utility test_bootstrap_environment_
 }
 
 usage () {
