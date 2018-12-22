@@ -17,7 +17,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-LOCAL_KERNEL=$(uname -s)
 
 DEBUG=FALSE
 DISABLE_COLOUR=FALSE
@@ -225,10 +224,14 @@ readable_directory () {
     [[ -d "${1}" && -r "${1}" ]]
 }
 
+local_kernel () {
+    uname -s
+}
+
 file_mode () {
     local path="${1}"
 
-    case "${LOCAL_KERNEL}" in
+    case "$(local_kernel)" in
         FreeBSD|OpenBSD|Darwin)
             stat -f '%#Mp%03Lp' "${path}"
             ;;
@@ -244,7 +247,7 @@ file_mode () {
 file_owner () {
     local path="${1}"
 
-    case "${LOCAL_KERNEL}" in
+    case "$(local_kernel)" in
         FreeBSD|OpenBSD|Darwin)
             stat -f '%Su:%Sg' "${path}"
             ;;
@@ -260,7 +263,7 @@ file_owner () {
 file_mtime () {
     local path="${1}"
 
-    case "${LOCAL_KERNEL}" in
+    case "$(local_kernel)" in
         FreeBSD|OpenBSD|Darwin)
             stat -f '%Um' "${path}"
             ;;
@@ -627,7 +630,7 @@ exit_after () {
 }
 
 base64_encode () {
-    if [[ "${LOCAL_KERNEL}" = 'Linux' ]] && cmd_is_available base64; then
+    if [[ "$(local_kernel)" = 'Linux' ]] && cmd_is_available base64; then
         base64 -w 0
     elif cmd_is_available openssl; then
         openssl base64 -A
@@ -639,7 +642,7 @@ base64_encode () {
 }
 
 base64_decode () {
-    if [[ "${LOCAL_KERNEL}" = 'Linux' ]] && cmd_is_available base64; then
+    if [[ "$(local_kernel)" = 'Linux' ]] && cmd_is_available base64; then
         base64 -d
     elif cmd_is_available openssl; then
         openssl base64 -d -A
