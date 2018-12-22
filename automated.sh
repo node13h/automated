@@ -47,7 +47,7 @@ LOAD_PATHS=()
 COPY_PAIRS=()
 DRAG_PAIRS=()
 MACROS=()
-
+TARGETS=()
 
 usage () {
     cat <<EOF
@@ -137,34 +137,28 @@ OPTIONS:
 EOF
 }
 
-rendered_script () {
-    local target="${1}"
-    local command="${2}"
 
-    local path macro var fn pair
-    local -a paths=()
+environment_script () {
+    # shellcheck disable=SC2034
+    local CURRENT_TARGET="${1}"
 
-    # sudo password has to go first!
-    if is_true "${SUDO}"; then
-        if is_true "${DUMP_SCRIPT}"; then
-            printf '%s\n' '*** SUDO PASSWORD IS HIDDEN IN SCRIPT DUMP MODE ***'
-        else
-            printf '%s\n' "${sudo_password}"  # This one will be consumed by the PTY helper
-        fi
-    fi
+    local var fn pair paths macro path file_path
 
-    cat <<"EOF"
+    # OWNER_UID_SOURCE is not quoted intentionally!
+    cat <<EOF
 #!/usr/bin/env bash
 
 set -euo pipefail
+
+AUTOMATED_OWNER_UID=${OWNER_UID_SOURCE}
 EOF
-    sourced_file "${AUTOMATED_LIBDIR%/}/libautomated.sh"
+    file_as_function "${AUTOMATED_LIBDIR%/}/libautomated.sh" \
+                     '__automated_libautomated'
+    sourced_drop '__automated_libautomated'
 
-    printf 'DEBUG=%s\n' "$(quoted "${DEBUG}")"
-    printf 'AUTOMATED_OWNER_UID=%s\n' "${OWNER_UID_SOURCE}"  # Do not quote!
-    printf 'TMUX_SOCK_PREFIX=%s\n' "$(quoted "${TMUX_SOCK_PREFIX}")"
-    printf 'CURRENT_TARGET=%s\n' "$(quoted "${target}")"
-
+    declared_var DEBUG
+    declared_var CURRENT_TARGET
+    declared_var TMUX_SOCK_PREFIX
     declared_var AUTOMATED_VERSION
 
     if [[ "${#EXPORT_VARS[@]}" -gt 0 ]]; then
@@ -176,13 +170,6 @@ EOF
     if [[ "${#EXPORT_FUNCTIONS[@]}" -gt 0 ]]; then
         for fn in "${EXPORT_FUNCTIONS[@]}"; do
             declared_function "${fn}"
-        done
-    fi
-
-    if [[ "${#COPY_PAIRS[@]}" -gt 0 ]]; then
-        for pair in "${COPY_PAIRS[@]}"; do
-            # shellcheck disable=SC2086
-            file_as_code ${pair}
         done
     fi
 
@@ -202,14 +189,47 @@ EOF
     fi
 
     if [[ "${#paths[@]}" -gt 0 ]]; then
-        while read -r path; do
-            sourced_file "${path}"
-        done < <(loadable_files "${paths[@]}")
+        for path in "${paths[@]}"; do
+            if [[ -d "${path}" ]]; then
+                for file_path in "${path%/}/"*.sh; do
+                    file_as_function "${file_path}"
+                    sourced_drop "${file_path}"
+                done
+            else
+                file_as_function "${path}"
+                sourced_drop "${path}"
+            fi
+        done
     fi
 
     if [[ "${#MACROS[@]}" -gt 0 ]]; then
         for macro in "${MACROS[@]}"; do
             eval "${macro}"
+        done
+    fi
+}
+
+rendered_script () {
+    local target="${1}"
+    local command="${2}"
+
+    local pair
+
+    # sudo password has to go first!
+    if is_true "${SUDO}"; then
+        if is_true "${DUMP_SCRIPT}"; then
+            printf '%s\n' '*** SUDO PASSWORD IS HIDDEN IN SCRIPT DUMP MODE ***'
+        else
+            printf '%s\n' "${sudo_password}"  # This one will be consumed by the PTY helper
+        fi
+    fi
+
+    bootstrap_environment "${target}"
+
+    if [[ "${#COPY_PAIRS[@]}" -gt 0 ]]; then
+        for pair in "${COPY_PAIRS[@]}"; do
+            # shellcheck disable=SC2086
+            file_as_code ${pair}
         done
     fi
 
@@ -283,7 +303,13 @@ execute () {
             output_processor=(cat)
         fi
 
-        { cmd "${handler[@]}" > >("${output_processor[@]}") 2> >("${output_processor[@]}" >&2) || rc=$?; } < <(rendered_script "${target}" "${command}")
+        set +e
+        (
+            set -e
+            cmd "${handler[@]}" > >("${output_processor[@]}") 2> >("${output_processor[@]}" >&2) < <(rendered_script "${target}" "${command}")
+        )
+        rc="$?"
+        set -e
 
         case "${rc}" in
             "${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}")
@@ -334,11 +360,9 @@ execute () {
     fi
 }
 
-main () {
-    local inventory_file rc
-    local -a targets=()
-
-    [[ "${#}" -gt 0 ]] || exit_after 1 usage | to_stderr
+parse_args () {
+    local list_file inventory_file path line
+    local -a pair
 
     while [[ "${#}" -gt 0 ]]; do
 
@@ -444,7 +468,7 @@ main () {
                 inventory_file="${2}"
                 shift
                 if [[ -r "${inventory_file}" ]]; then
-                    mapfile -t -O "${#targets[@]}" targets < "${inventory_file}"
+                    mapfile -t -O "${#TARGETS[@]}" TARGETS < "${inventory_file}"
                 else
                     throw "Could not read inventory file"
                 fi
@@ -463,7 +487,7 @@ main () {
                 ;;
 
             *)
-                targets+=("${1}")
+                TARGETS+=("${1}")
                 ;;
         esac
 
@@ -471,21 +495,58 @@ main () {
 
     done
 
+    # Validate
+
+    for path in "${LOAD_PATHS[@]}"; do
+        [[ -r "${path}" ]] || throw "Load path ${path} is not readable"
+    done
+
+    for line in "${COPY_PAIRS[@]}"; do
+        # shellcheck disable=SC2206
+        pair=(${line})
+        path="${pair[0]}"
+
+        [[ -r "${path}" ]] || throw "Copy path ${path} is not readable"
+        ! [[ -d "${path}" ]] || throw "Copy path ${path} is a directory"
+    done
+
+    for line in "${DRAG_PAIRS[@]}"; do
+        # shellcheck disable=SC2206
+        pair=(${line})
+        path="${pair[0]}"
+
+        [[ -r "${path}" ]] || throw "Drag path ${path} is not readable"
+        ! [[ -d "${path}" ]] || throw "Copy path ${path} is a directory"
+    done
+}
+
+
+main () {
+    local rc target
+
+    [[ "${#}" -gt 0 ]] || exit_after 1 usage | to_stderr
+
+    parse_args "$@"
+
     if is_true "${LOCAL}"; then
         execute "${CMD}"
-    elif [[ "${#targets[@]}" -gt 0 ]]; then
-        for target in "${targets[@]}"; do
+    elif [[ "${#TARGETS[@]}" -gt 0 ]]; then
+        for target in "${TARGETS[@]}"; do
 
-            rc=0
-
-            execute "${CMD}" "${target}" || rc=$?
+            set +e
+            (
+                set -e
+                execute "${CMD}" "${target}"
+            )
+            rc="$?"
+            set -e
 
             if [[ "${rc}" -ne 0 ]]; then
                 is_true "${IGNORE_FAILED}" || exit "${rc}"
             fi
         done
     else
-        throw "No targets specified"
+        throw 'No targets specified'
     fi
 }
 
