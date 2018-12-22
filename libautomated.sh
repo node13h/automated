@@ -626,6 +626,20 @@ msg_debug $(quoted "shipped ${src} as the file id ${file_id}")
 EOF
 }
 
+sourced_drop () {
+    local file_id="${1}"
+
+    local file_id_hash
+
+    file_id_hash=$(md5 <<< "${file_id}")
+
+    cat <<EOF
+is_function "drop_${file_id_hash}_body" || throw $(quoted "File id ${file_id} is not dragged")
+source <(drop_${file_id_hash}_body)
+msg_debug $(quoted "sourced file id ${file_id}")
+EOF
+}
+
 declared_var () {
     local var="${1}"
 

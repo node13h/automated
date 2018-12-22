@@ -377,10 +377,19 @@ test_is_function_false () {
     )
 }
 
+test_sourced_drop_correct () {
+    assert_stdout 'sourced_drop my-file-id' - <<"EOF"
+is_function "drop_85f3735d27bcffbd74d4d5b092e52da0_body" || throw File\ id\ my-file-id\ is\ not\ dragged
+source <(drop_85f3735d27bcffbd74d4d5b092e52da0_body)
+msg_debug sourced\ file\ id\ my-file-id
+EOF
+}
+
 suite () {
     shelter_run_test_class upload test_file_as_function_
     shelter_run_test_class upload test_drop_
     shelter_run_test_class upload test_file_as_code_
+    shelter_run_test_class upload test_sourced_drop_
     shelter_run_test_class utility test_is_function_
 }
 
