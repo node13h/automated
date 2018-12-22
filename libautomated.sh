@@ -17,6 +17,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+set -euo pipefail
 
 DEBUG=FALSE
 DISABLE_COLOUR=FALSE
@@ -490,24 +491,6 @@ in_proper_context () {
     printf '%s\n' "${cmdline[*]}"
 }
 
-loadable_files () {
-    local file_path load_path
-
-    [[ "${#}" -gt 0 ]] || return 0
-
-    for load_path in "${@}"; do
-        if readable_file "${load_path}"; then
-            printf '%s\n' "${load_path}"
-        elif readable_directory "${load_path}"; then
-            for file_path in "${load_path%/}/"*.sh; do
-                if readable_file "${file_path}"; then
-                    printf '%s\n' "${file_path}"
-                fi
-            done
-        fi
-    done
-}
-
 file_as_code () {
     local src="${1}"
     local dst="${2}"
@@ -652,14 +635,6 @@ declared_function () {
 
     declare -pf "${fn}"
     printf 'msg_debug "declared function %s"\n' "$(quoted "${fn}")"
-}
-
-sourced_file () {
-    local path="${1}"
-
-    cat "${path}"
-    newline
-    printf 'msg_debug "sourced %s"\n' "$(quoted "${path}")"
 }
 
 exit_after () {
