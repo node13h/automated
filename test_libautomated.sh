@@ -399,6 +399,21 @@ EOF
     )
 }
 
+test_bootstrap_environment_includes_environment_script () {
+    (
+        environment_script () {
+            cat <<EOF
+echo "environment for ${1}"
+EOF
+        }
+
+        assert_stdout 'source <(bootstrap_environment my-target); environment_script' - <<"EOF"
+environment for my-target
+echo "environment for my-target"
+EOF
+    )
+}
+
 suite () {
     shelter_run_test_class upload test_file_as_function_
     shelter_run_test_class upload test_drop_

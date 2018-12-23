@@ -725,6 +725,11 @@ msg_debug () {
     return 0
 }
 
+# Inception :)
+environment_script () {
+    drop '__automated_environment'
+}
+
 EOF
     declared_function 'cmd_is_available'
     declared_function 'python_interpreter'
