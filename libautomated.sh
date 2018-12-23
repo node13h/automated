@@ -38,7 +38,8 @@ SUPPORTED_MULTIPLEXERS=(tmux)
 SUDO_UID_VARIABLE='AUTOMATED_SUDO_UID'
 OWNER_UID_SOURCE="\${${SUDO_UID_VARIABLE}:-\$(id -u)}"
 
-TMUX_SOCK_PREFIX="/tmp/tmux-automated"
+TMUX_SOCK_PREFIX='/tmp/tmux-automated'
+TMUX_FIFO_PREFIX='/tmp/tmux-fifo'
 
 ANSI_FG_BLACK=30
 ANSI_FG_RED=31
@@ -333,10 +334,26 @@ run_in_multiplexer () {
                 msg_debug "Multiplexer is already running"
                 exit "${EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX}"
             else
-                msg_debug "Starting multiplexer and sending commands"
-                tmux_command new-session -d
-                tmux_command -l send "${@}"
-                tmux_command send ENTER
+                msg_debug "Starting multiplexer and executing commands"
+                (
+                    automated_multiplexer_script () {
+                        bootstrap_environment "${CURRENT_TARGET}"
+
+                        cat <<EOF
+rm -f -- $(quoted "${TMUX_FIFO_PREFIX}-${AUTOMATED_OWNER_UID}")
+
+${@}
+EOF
+                    }
+
+                    mkfifo "${TMUX_FIFO_PREFIX}-${AUTOMATED_OWNER_UID}"
+
+                    tmux_command new-session -d "/usr/bin/env bash $(quoted "${TMUX_FIFO_PREFIX}-${AUTOMATED_OWNER_UID}")"
+
+                    coproc automated_multiplexer_script_feeder {
+                        automated_multiplexer_script "${@}" >"${TMUX_FIFO_PREFIX}-${AUTOMATED_OWNER_UID}"
+                    }
+                )
             fi
 
             chown "${AUTOMATED_OWNER_UID}" "${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}"

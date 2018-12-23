@@ -130,6 +130,11 @@ OPTIONS:
   --tmux-sock-prefix PATH     Use custom PATH prefix for tmux socket on the
                               target.
                               Default: ${TMUX_SOCK_PREFIX}
+  --tmux-fifo-prefix PATH     Use custom PATH prefix for the FIFO object to use
+                              for communicating with tmux.
+                              Default: ${TMUX_FIFO_PREFIX}
+                              target.
+                              Default: ${TMUX_SOCK_PREFIX}
   --no-autoload-facts         Disable autoloading of the ${FACTDIR%/}/*.sh
   --prefix-target-output      Prefix all output from every target with
                               a "TARGET: "
@@ -407,6 +412,11 @@ parse_args () {
 
             --tmux-sock-prefix)
                 TMUX_SOCK_PREFIX="${2}"
+                shift
+                ;;
+
+            --tmux-fifo-prefix)
+                TMUX_FIFO_PREFIX="${2}"
                 shift
                 ;;
 
