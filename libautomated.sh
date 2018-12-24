@@ -350,6 +350,8 @@ EOF
 
                     tmux_command new-session -d "/usr/bin/env bash $(quoted "${TMUX_FIFO_PREFIX}-${AUTOMATED_OWNER_UID}")"
 
+                    # SC2034 looks like a false-positive here
+                    # shellcheck disable=SC2034
                     coproc automated_multiplexer_script_feeder {
                         automated_multiplexer_script "${@}" >"${TMUX_FIFO_PREFIX}-${AUTOMATED_OWNER_UID}"
                     }
