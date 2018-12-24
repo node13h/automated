@@ -321,6 +321,46 @@ supported_multiplexers () {
     printf '%s\n' "${SUPPORTED_MULTIPLEXERS[@]}"
 }
 
+run_in_tmux () {
+    if tmux_command ls 2>/dev/null | to_debug; then
+        msg_debug "Multiplexer is already running"
+        exit "${EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX}"
+    fi
+
+    local sock_file="${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}"
+    local fifo_file="${TMUX_FIFO_PREFIX}-${AUTOMATED_OWNER_UID}"
+
+    msg_debug "Starting multiplexer and executing commands"
+    (
+        automated_multiplexer_script () {
+            bootstrap_environment "${CURRENT_TARGET}"
+
+            cat <<EOF
+rm -f -- $(quoted "${fifo_file}")
+
+${@}
+EOF
+        }
+
+        mkfifo "${fifo_file}"
+
+        tmux_command \
+            new-session \
+            -d \
+            "/usr/bin/env bash $(quoted "${fifo_file}")"
+
+        # SC2034 looks like a false-positive here
+        # shellcheck disable=SC2034
+        coproc automated_multiplexer_script_feeder {
+            automated_multiplexer_script "${@}" >"${fifo_file}"
+        }
+    )
+
+    chown "${AUTOMATED_OWNER_UID}" "${sock_file}"
+
+    exit "${EXIT_RUNNING_IN_TMUX}"
+}
+
 run_in_multiplexer () {
     local multiplexer
 
@@ -330,37 +370,7 @@ run_in_multiplexer () {
 
     case "${multiplexer}" in
         tmux)
-            if tmux_command ls 2>/dev/null | to_debug; then
-                msg_debug "Multiplexer is already running"
-                exit "${EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX}"
-            else
-                msg_debug "Starting multiplexer and executing commands"
-                (
-                    automated_multiplexer_script () {
-                        bootstrap_environment "${CURRENT_TARGET}"
-
-                        cat <<EOF
-rm -f -- $(quoted "${TMUX_FIFO_PREFIX}-${AUTOMATED_OWNER_UID}")
-
-${@}
-EOF
-                    }
-
-                    mkfifo "${TMUX_FIFO_PREFIX}-${AUTOMATED_OWNER_UID}"
-
-                    tmux_command new-session -d "/usr/bin/env bash $(quoted "${TMUX_FIFO_PREFIX}-${AUTOMATED_OWNER_UID}")"
-
-                    # SC2034 looks like a false-positive here
-                    # shellcheck disable=SC2034
-                    coproc automated_multiplexer_script_feeder {
-                        automated_multiplexer_script "${@}" >"${TMUX_FIFO_PREFIX}-${AUTOMATED_OWNER_UID}"
-                    }
-                )
-            fi
-
-            chown "${AUTOMATED_OWNER_UID}" "${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}"
-
-            exit "${EXIT_RUNNING_IN_TMUX}"
+            run_in_tmux "${@}"
             ;;
 
         # TODO screen
