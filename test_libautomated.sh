@@ -442,6 +442,8 @@ main () {
         return 0
     fi
 
+    supported_shelter_versions 0.6
+
     if [[ -n "${ENABLE_CI_MODE:-}" ]]; then
         mkdir -p junit
         shelter_run_test_suite suite | shelter_junit_formatter >junit/test_libautomated.xml
