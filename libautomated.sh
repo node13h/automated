@@ -705,40 +705,45 @@ python_interpreter () {
     fi
 }
 
-supported_automated_versions () {
+semver_matches_one_of () {
+    local version_to_match="${1}"
+    shift
+
     declare -r SEMVER_RE='^([0-9]+).([0-9]+).([0-9]+)(-([0-9A-Za-z.-]+))?(\+([0-9A-Za-z.-]))?$'
     declare -r VER_RE='^([0-9]+)(.([0-9]+))?(.([0-9]+))?$'
 
-    [[ "$AUTOMATED_VERSION" =~ $SEMVER_RE ]]
+    [[ "${version_to_match}" =~ $SEMVER_RE ]] || return 1
 
-    declare automated_major="${BASH_REMATCH[1]}"
-    declare automated_minor="${BASH_REMATCH[2]}"
-    declare automated_patch="${BASH_REMATCH[3]}"
+    declare major="${BASH_REMATCH[1]}"
+    declare minor="${BASH_REMATCH[2]}"
+    declare patch="${BASH_REMATCH[3]}"
 
-    declare version match
+    declare version
 
     for version in "$@"; do
 
-        match=1
+        [[ "$version" =~ $VER_RE ]] || continue
 
-        [[ "$version" =~ $VER_RE ]]
+        [[ "$major" -eq "${BASH_REMATCH[1]}" ]] || continue
 
-        [[ "$automated_major" -eq "${BASH_REMATCH[1]}" ]] || match=0
-
-        if [[ -n "${BASH_REMATCH[3]:+x}" ]]; then
-            [[ "$automated_minor" -eq "${BASH_REMATCH[3]}" ]] || match=0
+        if [[ -n "${BASH_REMATCH[3]:-}" ]]; then
+            [[ "$minor" -eq "${BASH_REMATCH[3]}" ]] || continue
         fi
 
-        if [[ -n "${BASH_REMATCH[5]:+x}" ]]; then
-            [[ "$automated_patch" -eq "${BASH_REMATCH[5]}" ]] || match=0
+        if [[ -n "${BASH_REMATCH[5]:-}" ]]; then
+            [[ "$patch" -eq "${BASH_REMATCH[5]}" ]] || continue
         fi
 
-        if [[ "$match" -eq 1 ]]; then
-            return 0
-        fi
+        return 0
     done
 
-    throw "Potentially incompatible version ${AUTOMATED_VERSION} of Automated detected. Supported versions are: ${*}"
+    return 1
+}
+
+supported_automated_versions () {
+    if ! semver_matches_one_of "${AUTOMATED_VERSION}" "$@"; then
+        throw "Potentially incompatible version ${AUTOMATED_VERSION} of Automated detected. Supported versions are: ${*}"
+    fi
 }
 
 bootstrap_environment () {

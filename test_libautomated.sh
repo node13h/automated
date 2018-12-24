@@ -414,6 +414,38 @@ EOF
     )
 }
 
+test_semver_matches_one_of_major_minor_patch_match () {
+    assert_success 'semver_matches_one_of 1.2.3 0 1.2.3 2 3'
+}
+
+test_semver_matches_one_of_major_minor_match () {
+    assert_success 'semver_matches_one_of 1.2.3 0 1.2 2 3'
+}
+
+test_semver_matches_one_of_major_match () {
+    assert_success 'semver_matches_one_of 1.2.3 0 1 2 3'
+}
+
+test_semver_matches_one_of_no_match () {
+    assert_fail 'semver_matches_one_of 1.2.3 0 1.2.4 2 3'
+}
+
+test_supported_automated_versions_major_minor_patch_match () {
+    assert_success 'AUTOMATED_VERSION=1.2.3 supported_automated_versions 0 1.2.3 2 3'
+}
+
+test_supported_automated_versions_major_minor_match () {
+    assert_success 'AUTOMATED_VERSION=1.2.3 supported_automated_versions 0 1.2 2 3'
+}
+
+test_supported_automated_versions_major_match () {
+    assert_success 'AUTOMATED_VERSION=1.2.3 supported_automated_versions 0 1 2 3'
+}
+
+test_supported_automated_versions_no_match () {
+    assert_fail 'AUTOMATED_VERSION=1.2.3 supported_automated_versions 0 1.2.4 2 3 2>/dev/null'
+}
+
 suite () {
     shelter_run_test_class upload test_file_as_function_
     shelter_run_test_class upload test_drop_
@@ -421,6 +453,8 @@ suite () {
     shelter_run_test_class upload test_sourced_drop_
     shelter_run_test_class utility test_is_function_
     shelter_run_test_class utility test_bootstrap_environment_
+    shelter_run_test_class utility test_semver_matches_one_of_
+    shelter_run_test_class utility test_supported_automated_versions_
 }
 
 usage () {
