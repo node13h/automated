@@ -738,7 +738,7 @@ supported_automated_versions () {
         fi
     done
 
-    return 1
+    throw "Potentially incompatible version ${AUTOMATED_VERSION} of Automated detected. Supported versions are: ${*}"
 }
 
 bootstrap_environment () {
