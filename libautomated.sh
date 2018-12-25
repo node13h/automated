@@ -163,7 +163,7 @@ throw () {
     local msg="${1}"
 
     printf '%s\n' "${msg}" >&2
-    return 1
+    exit 1
 }
 
 to_file () {
