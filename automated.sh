@@ -68,6 +68,11 @@ OPTIONS:
   --sudo-passwordless         Don't ask for SUDO password. Will ask anyway if
                               target insists.
   --sudo-password-on-stdin    Read SUDO password from STDIN
+  --sudo-ask-password-cmd CMD Set command to use to ask user for SUDO password
+                              The command will receive the current target as the
+                              first argument.
+                              Defaults to the built-in ask_sudo_password command.
+                              Current value: ${SUDO_ASK_PASSWORD_CMD}
   -c, --call COMMAND          Command to call. Default is "${CMD}"
   -i, --inventory FILE        Load list of targets from the FILE
   -e, --export NAME           Make NAME from local environment available on the
@@ -296,7 +301,7 @@ execute () {
 
         if is_true "${SUDO}"; then
             if is_true "${force_sudo_password}" || ! is_true "${SUDO_PASSWORDLESS}"; then
-                sudo_password=$(ask_sudo_password "${target}")
+                sudo_password=$("${SUDO_ASK_PASSWORD_CMD}" "${target}")
             fi
         fi
 
@@ -391,6 +396,11 @@ parse_args () {
 
             --sudo-passwordless)
                 SUDO_PASSWORDLESS=TRUE
+                ;;
+
+            --sudo-ask-password-cmd)
+                SUDO_ASK_PASSWORD_CMD="${2}"
+                shift
                 ;;
 
             --dont-attach)
