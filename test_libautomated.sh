@@ -167,27 +167,10 @@ EOF
 }
 
 test_file_as_function_unreadable () {
-    declare rc temp_file temp_file_quoted
-    temp_file=$(mktemp)
-
-    set +e
-    (
-        set -e
-
-        chmod 0000 "$temp_file"
-        temp_file_quoted=$(printf '%q' "$temp_file")
-
-        assert_fail "file_as_function ${temp_file_quoted} my-file-id >/dev/null"
-        assert_stdout "file_as_function ${temp_file_quoted} my-file-id" - <<EOF
-throw ${temp_file_quoted}\ was\ not\ readable\ at\ the\ moment\ of\ the\ shipping\ attempt
+    assert_fail "file_as_function /non/existing/file my-file-id >/dev/null"
+        assert_stdout "file_as_function /non/existing/file my-file-id" - <<EOF
+throw /non/existing/file\ was\ not\ readable\ at\ the\ moment\ of\ the\ shipping\ attempt
 EOF
-    )
-    rc="$?"
-    set -e
-
-    rm -f -- "$temp_file"
-
-    return "$rc"
 }
 
 test_drop_stdout () {
@@ -338,27 +321,10 @@ EOF
 }
 
 test_file_as_code_unreadable () {
-    declare rc temp_file temp_file_quoted
-    temp_file=$(mktemp)
-
-    set +e
-    (
-        set -e
-
-        chmod 0000 "$temp_file"
-        temp_file_quoted=$(printf '%q' "$temp_file")
-
-        assert_fail "file_as_code ${temp_file_quoted} /tmp/dst >/dev/null"
-        assert_stdout "file_as_code ${temp_file_quoted} /tmp/dst" - <<EOF
-throw ${temp_file_quoted}\ was\ not\ readable\ at\ the\ moment\ of\ the\ shipping\ attempt
+    assert_fail "file_as_code /non/existing/file /tmp/dst >/dev/null"
+    assert_stdout "file_as_code /non/existing/file /tmp/dst" - <<EOF
+throw /non/existing/file\ was\ not\ readable\ at\ the\ moment\ of\ the\ shipping\ attempt
 EOF
-    )
-    rc="$?"
-    set -e
-
-    rm -f -- "$temp_file"
-
-    return "$rc"
 }
 
 test_is_function_true () {
