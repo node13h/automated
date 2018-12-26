@@ -204,7 +204,7 @@ md5 () {
     md5sum -b | cut -f 1 -d ' '
 }
 
-join () {
+joined () {
     local sep="${1}"
     shift
     local item
