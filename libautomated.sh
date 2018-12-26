@@ -759,7 +759,7 @@ semver_matches_one_of () {
 
 supported_automated_versions () {
     if ! semver_matches_one_of "${AUTOMATED_VERSION}" "$@"; then
-        throw "Unsupported version ${AUTOMATED_VERSION} of Automated detected. Supported versions are: ${*}"
+        throw "Unsupported version ${AUTOMATED_VERSION} of Automated detected. Supported versions are: $(joined ', ' "${@}")"
     fi
 }
 
