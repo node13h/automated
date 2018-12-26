@@ -446,6 +446,24 @@ test_supported_automated_versions_no_match () {
     assert_fail 'AUTOMATED_VERSION=1.2.3 supported_automated_versions 0 1.2.4 2 3 2>/dev/null'
 }
 
+test_join_single () {
+    assert_stdout 'join ", " one' - <<EOF
+one
+EOF
+}
+
+test_join_multiple () {
+    assert_stdout 'join ", " one two three' - <<EOF
+one, two, three
+EOF
+}
+
+test_join_none () {
+    assert_success 'join ","'
+    assert_stdout 'join ","' <(true)
+}
+
+
 suite () {
     shelter_run_test_class upload test_file_as_function_
     shelter_run_test_class upload test_drop_
@@ -455,6 +473,7 @@ suite () {
     shelter_run_test_class utility test_bootstrap_environment_
     shelter_run_test_class utility test_semver_matches_one_of_
     shelter_run_test_class utility test_supported_automated_versions_
+    shelter_run_test_class utility test_join_
 }
 
 usage () {

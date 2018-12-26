@@ -204,6 +204,23 @@ md5 () {
     md5sum -b | cut -f 1 -d ' '
 }
 
+join () {
+    local sep="${1}"
+    shift
+    local item
+
+    [[ "${#}" -gt 0 ]] || return 0
+
+    printf '%s' "${1}"
+    shift
+
+    for item in "${@}"; do
+        printf "${sep}%s" "${item}"
+    done
+
+    printf '\n'
+}
+
 cmd () {
     # For some reason bash 4.2 does play well if the pipe is used in this function
     # causing use cases like `cmd cat <(echo "hello")` to fail.
