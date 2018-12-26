@@ -461,7 +461,7 @@ main () {
         return 0
     fi
 
-    supported_shelter_versions 0.6
+    supported_shelter_versions 0.6 0.7
 
     if [[ -n "${ENABLE_CI_MODE:-}" ]]; then
         mkdir -p junit
