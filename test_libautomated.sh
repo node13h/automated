@@ -461,6 +461,103 @@ address.example.com
 EOF
 }
 
+test_to_file_correct () {
+    declare rc temp_dir
+
+    # Ensure the test environment has the patch command.
+    # For more information see the to_file() source
+    assert_success 'command -v patch >/dev/null' 'Please install the patch command'
+
+    temp_dir=$(mktemp -d)
+
+    set +e
+    (
+        set -e
+
+        temp_dir_quoted=$(printf '%q' "$temp_dir")
+
+        echo 'Hello World' | to_file "${temp_dir%/}/test.txt"
+
+        assert_stdout "cat ${temp_dir_quoted%/}/test.txt" - <<< 'Hello World'
+    )
+    rc="$?"
+    set -e
+
+    rm -f -- "${temp_dir%/}/test.txt"
+    rmdir -- "$temp_dir"
+
+    return "$rc"
+}
+
+test_to_file_callback () {
+    declare rc temp_dir
+
+    # Ensure the test environment has the patch command.
+    # For more information see the to_file() source
+    assert_success 'command -v patch >/dev/null' 'Please install the patch command'
+
+    temp_dir=$(mktemp -d)
+
+    set +e
+    (
+        set -e
+
+        callback_fn () {
+            echo 'Callback!'
+        }
+
+        temp_dir_quoted=$(printf '%q' "$temp_dir")
+
+        assert_stdout "echo 'Hello World' | to_file ${temp_dir_quoted%/}/test.txt callback_fn" - <<"EOF"
+Callback!
+EOF
+        assert_stdout "cat ${temp_dir_quoted%/}/test.txt" - <<< 'Hello World'
+    )
+    rc="$?"
+    set -e
+
+    rm -f -- "${temp_dir%/}/test.txt"
+    rmdir -- "$temp_dir"
+
+    return "$rc"
+}
+
+test_to_file_no_patch_correct () {
+    declare rc temp_dir
+
+    # Ensure the test environment has the patch command.
+    # For more information see the to_file() source
+    assert_success 'command -v patch >/dev/null' 'Please install the patch command'
+
+    temp_dir=$(mktemp -d)
+
+    set +e
+    (
+        set -e
+
+        cmd_is_available_mock () {
+            ! [[ "$1" = 'patch' ]] || return 1
+            command -v "$1" >/dev/null
+        }
+
+        patch_command 'function' 'cmd_is_available' 'cmd_is_available_mock "$@"'
+
+        temp_dir_quoted=$(printf '%q' "$temp_dir")
+
+        echo 'Hello World' | to_file "${temp_dir%/}/test.txt"
+
+        assert_stdout "cat ${temp_dir_quoted%/}/test.txt" - <<< 'Hello World'
+        unpatch_command 'cmd_is_available'
+    )
+    rc="$?"
+    set -e
+
+    rm -f -- "${temp_dir%/}/test.txt"
+    rmdir -- "$temp_dir"
+
+    return "$rc"
+}
+
 suite () {
     shelter_run_test_class upload test_file_as_function_
     shelter_run_test_class upload test_drop_
@@ -469,6 +566,7 @@ suite () {
     shelter_run_test_class utility test_is_function_
     shelter_run_test_class utility test_semver_matches_one_of_
     shelter_run_test_class utility test_joined_
+    shelter_run_test_class utility test_to_file_
     shelter_run_test_class automated test_bootstrap_environment_
     shelter_run_test_class automated test_supported_automated_versions_
     shelter_run_test_class automated test_target_as_ssh_arguments_

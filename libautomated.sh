@@ -187,7 +187,13 @@ to_file () {
 
     mtime_before=$(file_mtime "${target_path}" 2>/dev/null) || mtime_before=0
 
-    diff -duaN "${target_path}" - | tee >(printable_only | text_block "${1}" | to_debug "${ANSI_FG_BRIGHT_BLACK}") | patch --binary -s -p0 "$target_path"
+    if cmd_is_available 'diff' && cmd_is_available 'patch'; then
+        diff -duaN "${target_path}" - | tee >(printable_only | text_block "${1}" | to_debug "${ANSI_FG_BRIGHT_BLACK}") | patch --binary -s -p0 "$target_path"
+    else
+        msg_debug 'Please consider installing patch and diff commands to enable diff support for to_file()'
+
+        tee >(printable_only | text_block "${1}" | to_debug "${ANSI_FG_BRIGHT_BLACK}") >"${target_path}"
+    fi
 
     mtime_after=$(file_mtime "${target_path}")
 
