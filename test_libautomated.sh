@@ -429,6 +429,37 @@ test_joined_none () {
     assert_stdout 'joined ","' <(true)
 }
 
+test_target_as_ssh_arguments_full () {
+    assert_stdout 'target_as_ssh_arguments user@address.example.com:22' - <<"EOF"
+-p
+22
+-l
+user
+address.example.com
+EOF
+}
+
+test_target_as_ssh_arguments_user_host () {
+    assert_stdout 'target_as_ssh_arguments user@address.example.com' - <<"EOF"
+-l
+user
+address.example.com
+EOF
+}
+
+test_target_as_ssh_arguments_port_host () {
+    assert_stdout 'target_as_ssh_arguments address.example.com:22' - <<"EOF"
+-p
+22
+address.example.com
+EOF
+}
+
+test_target_as_ssh_arguments_host () {
+    assert_stdout 'target_as_ssh_arguments address.example.com' - <<"EOF"
+address.example.com
+EOF
+}
 
 suite () {
     shelter_run_test_class upload test_file_as_function_
@@ -436,10 +467,11 @@ suite () {
     shelter_run_test_class upload test_file_as_code_
     shelter_run_test_class upload test_sourced_drop_
     shelter_run_test_class utility test_is_function_
-    shelter_run_test_class utility test_bootstrap_environment_
     shelter_run_test_class utility test_semver_matches_one_of_
-    shelter_run_test_class utility test_supported_automated_versions_
     shelter_run_test_class utility test_joined_
+    shelter_run_test_class automated test_bootstrap_environment_
+    shelter_run_test_class automated test_supported_automated_versions_
+    shelter_run_test_class automated test_target_as_ssh_arguments_
 }
 
 usage () {

@@ -100,7 +100,7 @@ This automation framework will enable you to run commands (including locally def
 - OS updates
 - Automation of the ad hoc tasks executed on multiple systems
 
-See the [ops-scripts repository](https://github.com/node13h/ops-scripts/tree/master/scripts) for some examples.
+See the [cookbook directory](cookbook/) and the [ops-scripts repository](https://github.com/node13h/ops-scripts/tree/master/scripts) for some examples.
 
 
 ## Foundation for your automation scripts
