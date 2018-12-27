@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (C) 2016-2017 Sergej Alikov <sergej.alikov@gmail.com>
+# Copyright (C) 2016-2018 Sergej Alikov <sergej.alikov@gmail.com>
 
 # This file is part of Automated.
 
@@ -143,6 +143,10 @@ OPTIONS:
   --no-autoload-facts         Disable autoloading of the ${FACTDIR%/}/*.sh
   --prefix-target-output      Prefix all output from every target with
                               a "TARGET: "
+  --ssh-command               Set the ssh client command. One of the use cases
+                              is wrapping the ssh command in sshpass.
+                              Will be eval'd.
+                              Default: ${SSH_COMMAND}
 
 EOF
 }
@@ -280,6 +284,8 @@ execute () {
     local handler rc do_attach multiplexer
     local -a output_processor
 
+    local -a ssh_args
+
     # Loop until SUDO password is accepted
     while true; do
 
@@ -289,10 +295,11 @@ execute () {
             if is_true "${LOCAL}"; then
                 handler=(eval)
             else
-                handler=(ssh -q $(target_as_ssh_arguments "${target}") --)
+                mapfile -t ssh_args < <(target_as_ssh_arguments "${target}")
+                handler=("${SSH_COMMAND}" '-q' "$(quoted "${ssh_args[@]}")" '--')
             fi
 
-            handler+=("$(in_proper_context bash "${force_sudo_password}")")
+            handler+=("$(quoted "$(in_proper_context bash "${force_sudo_password}")")")
         fi
 
         sudo_password=''
@@ -316,7 +323,8 @@ execute () {
         set +e
         (
             set -e
-            cmd "${handler[@]}" > >("${output_processor[@]}") 2> >("${output_processor[@]}" >&2) < <(rendered_script "${target}" "${command}")
+            msg_debug "Executing via ${handler[*]}" "${ANSI_FG_BRIGHT_BLUE}"
+            eval "${handler[@]}" > >("${output_processor[@]}") 2> >("${output_processor[@]}" >&2) < <(rendered_script "${target}" "${command}")
         )
         rc="$?"
         set -e
@@ -384,6 +392,11 @@ parse_args () {
 
             -v|--verbose)
                 DEBUG=TRUE
+                ;;
+
+            --ssh-command)
+                SSH_COMMAND="${2}"
+                shift
                 ;;
 
             -s|--sudo)

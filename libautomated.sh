@@ -22,6 +22,8 @@ set -euo pipefail
 DEBUG=FALSE
 DISABLE_COLOUR=FALSE
 
+SSH_COMMAND='ssh'
+
 SUDO=FALSE
 SUDO_PASSWORDLESS=FALSE
 SUDO_PASSWORD_ON_STDIN=FALSE
@@ -301,25 +303,37 @@ attach_to_multiplexer () {
     local multiplexer="${1}"
     local target="${2:-LOCAL HOST}"
 
-    local handler
+    local -a handler
+    local -a command
+
+    local -a ssh_args
 
     if is_true "${LOCAL}"; then
         handler=(eval)
     else
-        handler=(ssh -t -q $(target_as_ssh_arguments "${target}") --)
+        mapfile -t ssh_args < <(target_as_ssh_arguments "${target}")
+        handler=("${SSH_COMMAND}" '-t' '-q' "$(quoted "${ssh_args[@]}")" '--')
     fi
 
     case "${multiplexer}" in
         tmux)
-            cmd "${handler[@]}" "tmux -S \"${TMUX_SOCK_PREFIX}-${OWNER_UID_SOURCE}\" attach"
+            # shellcheck disable=SC2016
+            command=('tmux' '-S' "$(quoted "${TMUX_SOCK_PREFIX}-${OWNER_UID_SOURCE}")" 'attach')
             ;;
 
         # TODO screen
     esac
+
+    msg_debug "Attaching via ${handler[*]}" "${ANSI_FG_BRIGHT_BLUE}"
+    msg_debug "Attach command: ${command[*]}"
+
+    eval "${handler[@]}" "${command[@]}"
 }
 
 tmux_command () {
-    cmd tmux -S "${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}" "${@}"
+    msg_debug "tmux command ${*} over the ${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID} socket" \
+              "${ANSI_FG_BRIGHT_BLUE}"
+    tmux -S "${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}" "${@}"
 }
 
 multiplexer_present () {
@@ -501,7 +515,7 @@ target_as_ssh_arguments () {
 
     args+=("${address}")
 
-    printf '%s\n' "${args[*]}"
+    printf '%s\n' "${args[@]}"
 }
 
 pty_helper_script () {
@@ -520,6 +534,7 @@ pty_helper_settings () {
 }
 
 in_proper_context () {
+    # shellcheck disable=SC2178
     local command="${1}"
     local force_sudo_password="${2:-FALSE}"
     # shellcheck disable=SC2016
@@ -533,6 +548,7 @@ in_proper_context () {
         fi
     fi
 
+    # shellcheck disable=SC2128
     cmdline+=("${command}")
 
     printf '%s\n' "${cmdline[*]}"
