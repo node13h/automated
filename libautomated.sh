@@ -592,14 +592,13 @@ EOF
 touch $(quoted "${dst}")
 chmod 0600 $(quoted "${dst}")
 base64_decode <<"${boundary}" | gzip -d >$(quoted "${dst}")
-chmod ${mode} $(quoted "${dst}")
 EOF
 
     gzip -n -6 - <"${src}" | base64_encode
 
     cat <<EOF
 ${boundary}
-
+chmod ${mode} $(quoted "${dst}")
 msg_debug $(quoted "copied ${src} to ${dst} on the target")
 EOF
 }
