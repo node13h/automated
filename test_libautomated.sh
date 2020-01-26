@@ -259,10 +259,9 @@ EOF
 touch /tmp/dst
 chmod 0600 /tmp/dst
 base64_decode <<"EOF-d075c6918aed70a32aaebbd10eb9ecab" | gzip -d >/tmp/dst
-chmod ${mode} /tmp/dst
 H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
 EOF-d075c6918aed70a32aaebbd10eb9ecab
-
+chmod ${mode} /tmp/dst
 msg_debug copied\ ${temp_file_quoted}\ to\ /tmp/dst\ on\ the\ target
 EOF
     )
@@ -284,10 +283,9 @@ test_file_as_code_pipe () {
 touch /tmp/dst
 chmod 0600 /tmp/dst
 base64_decode <<"EOF-d075c6918aed70a32aaebbd10eb9ecab" | gzip -d >/tmp/dst
-chmod ${mode} /tmp/dst
 H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
 EOF-d075c6918aed70a32aaebbd10eb9ecab
-
+chmod ${mode} /tmp/dst
 msg_debug copied\ /dev/fd/0\ to\ /tmp/dst\ on\ the\ target
 EOF
 )
