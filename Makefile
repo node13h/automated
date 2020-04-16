@@ -44,7 +44,7 @@ automated-config.sh: automated-config.sh.in VERSION
 test:
 	bash test_libautomated.sh
 
-build: automated-config.sh test
+build: automated-config.sh
 
 install: build
 	install -m 0755 -d $(DESTDIR)$(BINDIR)
