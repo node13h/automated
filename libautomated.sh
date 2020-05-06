@@ -418,6 +418,10 @@ run_in_multiplexer () {
     esac
 }
 
+interactive_multiplexer_session () {
+    run_in_multiplexer "bash -i -s -- <(bootstrap_environment "$CURRENT_TARGET") <<< $(quoted 'source $1; exec </dev/tty')"
+}
+
 interactive_answer () {
     local target="${1}"
     local prompt="${2}"
