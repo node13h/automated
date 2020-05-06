@@ -155,7 +155,11 @@ msg () {
     local msg="${1}"
     local colour="${2:-${ANSI_FG_WHITE}}"
 
-    printf '%s\n' "${msg}" | colorized "${colour}" >&2
+    if is_true "${DISABLE_COLOUR}"; then
+        printf '%s\n' "${msg}" >&2
+    else
+        printf $'\e''[%sm%s'$'\e''[0m\n' "${colour}" "${msg}" >&2
+    fi
 }
 
 msg_debug () {
@@ -163,7 +167,7 @@ msg_debug () {
     local colour="${2:-${ANSI_FG_YELLOW}}"
 
     if is_true "${DEBUG}"; then
-        printf 'DEBUG %s\n' "${msg}" | colorized "${colour}" >&2
+        msg "DEBUG ${msg}" "${colour}"
     fi
 }
 
@@ -236,11 +240,7 @@ joined () {
 }
 
 cmd () {
-    # For some reason bash 4.2 does play well if the pipe is used in this function
-    # causing use cases like `cmd cat <(echo "hello")` to fail.
-    # For now I am redirecting the STDOUT to a subprocess as an
-    # alternative.
-    printf 'CMD %s\n' "$(quoted "${@}")" > >(to_debug "${ANSI_FG_GREEN}")
+    msg_debug "CMD $(quoted "${@}")" "${ANSI_FG_GREEN}"
 
     "${@}"
 }
