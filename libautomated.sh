@@ -365,6 +365,8 @@ supported_multiplexers () {
 }
 
 run_in_tmux () {
+    local command="${1}"
+
     if tmux_command ls 2>/dev/null | to_debug; then
         msg_debug "Multiplexer is already running"
         exit "${EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX}"
@@ -374,30 +376,26 @@ run_in_tmux () {
     local fifo_file="${TMUX_FIFO_PREFIX}-${AUTOMATED_OWNER_UID}"
 
     msg_debug "Starting multiplexer and executing commands"
-    (
-        automated_multiplexer_script () {
-            bootstrap_environment "${CURRENT_TARGET}"
 
-            cat <<EOF
+    msg_debug "$command"
+
+    mkfifo "${fifo_file}"
+
+    tmux_command \
+        new-session \
+        -d \
+        "/usr/bin/env bash $(quoted "${fifo_file}")"
+
+    {
+        cat <<EOF
 rm -f -- $(quoted "${fifo_file}")
-
-${@}
 EOF
-        }
+        bootstrap_environment "${CURRENT_TARGET}"
 
-        mkfifo "${fifo_file}"
-
-        tmux_command \
-            new-session \
-            -d \
-            "/usr/bin/env bash $(quoted "${fifo_file}")"
-
-        # SC2034 looks like a false-positive here
-        # shellcheck disable=SC2034
-        coproc automated_multiplexer_script_feeder {
-            automated_multiplexer_script "${@}" >"${fifo_file}"
-        }
-    )
+        cat <<EOF
+${command}
+EOF
+    } >"${fifo_file}"
 
     chown "${AUTOMATED_OWNER_UID}" "${sock_file}"
 
@@ -706,7 +704,7 @@ declared_var () {
 declared_function () {
     local fn="${1}"
 
-    declare -pf "${fn}"
+    declare -f "${fn}"
     printf 'msg_debug "declared function %s"\n' "$(quoted "${fn}")"
 }
 
