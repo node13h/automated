@@ -112,7 +112,7 @@ sudo_pass = b''.join(sudo_pass_buffer)
 
 pid = os.fork()
 
-if pid is 0:
+if pid == 0:
     os.close(parent_fd)
     os.setsid()
     # Attach to the controlling terminal on the BSD
