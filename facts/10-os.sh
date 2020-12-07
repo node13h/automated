@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC1091,SC2034
 
-# Copyright (C) 2016-2017 Sergej Alikov <sergej.alikov@gmail.com>
+# Copyright (C) 2016-2020 Sergej Alikov <sergej.alikov@gmail.com>
 
 # This file is part of Automated.
 
@@ -31,11 +31,11 @@ fi
 
 if [[ -f /etc/redhat-release ]]; then
     FACT_OS_FAMILY='RedHat'
-    for pkg in 'centos-release' 'redhat-release' 'fedora-release'; do
+    for pkg in 'centos-release' 'centos-linux-release' 'redhat-release' 'fedora-release'; do
         if ver=$(rpm -q --queryformat '%{VERSION} %{RELEASE}' "${pkg}"); then
             read -r FACT_OS_VERSION FACT_OS_RELEASE <<< "${ver}"
             case "${pkg}" in
-                'centos-release')
+                'centos-release'|'centos-linux-release')
                     FACT_OS_NAME='CentOS'
                     ;;
                 'redhat-release')
