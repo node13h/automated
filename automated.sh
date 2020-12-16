@@ -374,7 +374,7 @@ execute () {
 
     if is_true "${do_attach}"; then
         msg_debug "Attaching to multiplexer (${multiplexer}) ..."
-        attach_to_multiplexer "${multiplexer}" "${target}" || msg "Unable to attach to multiplexer on ${target}. Perhaps it completed it's job and exited already?"
+        attach_to_multiplexer "${multiplexer}" "${target}"
     fi
 }
 
