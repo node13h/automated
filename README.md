@@ -59,13 +59,6 @@ This automation framework will enable you to run commands (including locally def
   ```
   Take a look at the [OS script from the ops-scripts repository](https://github.com/node13h/ops-scripts/blob/master/scripts/OS) for an extended version of this example.
 
-- **Fact support**
-
-  Some facts about the target systems are available via FACT\_\* variables. Take a look at built-in facts:
-
-  ```bash
-  automated.sh -c 'set | grep ^FACT_' target.example.com
-  ```
 
 - **File upload support**
 

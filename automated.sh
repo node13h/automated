@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (C) 2016-2018 Sergej Alikov <sergej.alikov@gmail.com>
+# Copyright (C) 2016-2021 Sergej Alikov <sergej.alikov@gmail.com>
 
 # This file is part of Automated.
 
@@ -27,15 +27,11 @@ source "${AUTOMATED_PROG_DIR%/}/automated-config.sh"
 # shellcheck source=libautomated.sh
 source "${AUTOMATED_LIBDIR%/}/libautomated.sh"
 
-# TODO Throw error on unsupported systems (CentOS5, perhaps Ubuntu 10.04)
-
-FACTDIR="${AUTOMATED_LIBDIR%/}/facts"
 
 LOCAL=FALSE
 AUTO_ATTACH=TRUE
 IGNORE_FAILED=FALSE
 DUMP_SCRIPT=FALSE
-AUTOLOAD_FACTS=TRUE
 PREFIX_TARGET_OUTPUT=FALSE
 PASS_STDIN=FALSE
 
@@ -140,7 +136,6 @@ OPTIONS:
                               Default: ${TMUX_FIFO_PREFIX}
                               target.
                               Default: ${TMUX_SOCK_PREFIX}
-  --no-autoload-facts         Disable autoloading of the ${FACTDIR%/}/*.sh
   --prefix-target-output      Prefix all output from every target with
                               a "TARGET: "
   --ssh-command               Set the ssh client command. One of the use cases
@@ -192,10 +187,6 @@ EOF
             # shellcheck disable=SC2086
             file_as_function ${pair}
         done
-    fi
-
-    if is_true "${AUTOLOAD_FACTS}"; then
-        paths+=("${FACTDIR}")
     fi
 
     if [[ "${#LOAD_PATHS[@]}" -gt 0 ]]; then
@@ -509,10 +500,6 @@ parse_args () {
 
             --local)
                 LOCAL=TRUE
-                ;;
-
-            --no-autoload-facts)
-                AUTOLOAD_FACTS=FALSE
                 ;;
 
             --version)
