@@ -157,34 +157,6 @@ The following systems were confirmed to work both as controlling workstation and
 sudo make install
 ```
 
-### Packages for RedHat-based systems
-
-```bash
-cat <<"EOF" | sudo tee /etc/yum.repos.d/alikov.repo
-[alikov]
-name=alikov
-baseurl=https://dl.bintray.com/alikov/rpm
-gpgcheck=0
-repo_gpgcheck=1
-gpgkey=https://bintray.com/user/downloadSubjectPublicKey?username=bintray
-enabled=1
-EOF
-
-sudo yum install automated
-```
-
-### Packages for Debian-based systems
-
-```bash
-curl 'https://bintray.com/user/downloadSubjectPublicKey?username=bintray' | sudo apt-key add -
-
-cat <<"EOF" | sudo tee /etc/apt/sources.list.d/alikov.list
-deb https://dl.bintray.com/alikov/deb xenial main
-EOF
-
-sudo apt-get update && sudo apt-get install automated
-```
-
 ## Testing
 
 `vagrant up` will bring Fedora, CentOS, Ubuntu and FreeBSD VMs with the pre-installed automated.sh and the pre-configured user account `user`. The password for this user is `secret`. Every machine will allow passwordless SSH pubkey-based login and SUDO using this user account.

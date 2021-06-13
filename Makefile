@@ -13,9 +13,6 @@ else
 PKG_RELEASE := 1
 endif
 
-BINTRAY_RPM_PATH := alikov/rpm/$(PROJECT)/$(PKG_VERSION)
-BINTRAY_DEB_PATH := alikov/deb/$(PROJECT)/$(PKG_VERSION)
-
 PREFIX := /usr/local
 BINDIR = $(PREFIX)/bin
 LIBDIR = $(PREFIX)/lib
@@ -29,7 +26,7 @@ SPEC_FILE := $(PROJECT).spec
 RPM_PACKAGE := bdist/noarch/$(PROJECT)-$(PKG_VERSION)-$(PKG_RELEASE).noarch.rpm
 DEB_PACKAGE := bdist/$(PROJECT)_$(VERSION)_all.deb
 
-.PHONY: install build clean test release-start release-finish uninstall release sdist rpm publish-rpm deb publish-deb publish
+.PHONY: install build clean test release-start release-finish uninstall release sdist rpm deb
 
 all: build
 
@@ -114,11 +111,3 @@ $(DEB_PACKAGE): control $(SDIST_TARBALL)
 	rm -rf -- "$$target"
 
 deb: $(DEB_PACKAGE)
-
-publish-rpm: rpm
-	jfrog bt upload --publish=true $(RPM_PACKAGE) $(BINTRAY_RPM_PATH)
-
-publish-deb: deb
-	jfrog bt upload --publish=true --deb xenial/main/all $(DEB_PACKAGE) $(BINTRAY_DEB_PATH)
-
-publish: publish-rpm publish-deb
