@@ -143,10 +143,10 @@ Any *NIX system with Bash version 4 or later should work. SUDO PTY handling and 
 
 The following systems were confirmed to work both as controlling workstation and remote targets
 
-- CentOS 7
-- Ubuntu 16.04
+- CentOS 7+
+- Ubuntu 16.04+
 - Fedora
-- FreeBSD 11
+- FreeBSD 11+
 
 
 ## Installing
