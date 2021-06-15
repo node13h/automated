@@ -2,7 +2,7 @@
 
 # MIT license
 
-# Copyright (c) 2016-2018 Sergej Alikov <sergej.alikov@gmail.com>
+# Copyright (c) 2016-2021 Sergej Alikov <sergej.alikov@gmail.com>
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -76,14 +76,6 @@ is_true () {
     [[ "${1,,}" =~ ^(yes|true|on|1)$ ]]
 }
 
-to_stderr () {
-    >&2 cat
-}
-
-to_null () {
-    cat >/dev/null
-}
-
 printable_only () {
   tr -cd '\11\12\15\40-\176'
 }
@@ -113,15 +105,12 @@ sed_replacement () {
 
 colorized () {
     local colour="${1}"
-    local -a processor
 
     if is_true "${DISABLE_COLOUR}"; then
-        processor=(cat)
+        cat
     else
-        processor=(sed -e s/^/$'\e'\["${colour}"m/ -e s/$/$'\e'\[0m/)
+        sed -e s/^/$'\e'\["${colour}"m/ -e s/$/$'\e'\[0m/
     fi
-
-    "${processor[@]}"
 }
 
 text_block () {
@@ -143,7 +132,7 @@ to_debug () {
     if is_true "${DEBUG}"; then
         colorized "${colour}" >&2
     else
-        to_null
+        cat >/dev/null
     fi
 }
 
@@ -358,10 +347,6 @@ multiplexer_present () {
     done
 
     return 1
-}
-
-supported_multiplexers () {
-    printf '%s\n' "${SUPPORTED_MULTIPLEXERS[@]}"
 }
 
 run_in_tmux () {
