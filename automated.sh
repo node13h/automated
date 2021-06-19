@@ -19,14 +19,6 @@
 
 set -euo pipefail
 
-AUTOMATED_PROG=$(basename "${BASH_SOURCE[0]:-}")
-AUTOMATED_PROG_DIR=$(dirname "${BASH_SOURCE[0]:-}")
-
-# shellcheck source=automated-config.sh
-source "${AUTOMATED_PROG_DIR%/}/automated-config.sh"
-# shellcheck source=libautomated.sh
-source "${AUTOMATED_LIBDIR%/}/libautomated.sh"
-
 
 LOCAL=FALSE
 AUTO_ATTACH=TRUE
@@ -44,6 +36,65 @@ COPY_PAIRS=()
 DRAG_PAIRS=()
 MACROS=()
 TARGETS=()
+
+SSH_COMMAND='ssh'
+
+SUDO=FALSE
+SUDO_PASSWORDLESS=FALSE
+SUDO_PASSWORD_ON_STDIN=FALSE
+SUDO_ASK_PASSWORD_CMD=ask_sudo_password
+
+SUDO_UID_VARIABLE='AUTOMATED_SUDO_UID'
+OWNER_UID_SOURCE="\${${SUDO_UID_VARIABLE}:-\$(id -u)}"
+
+EXIT_TIMEOUT=65
+EXIT_SUDO_PASSWORD_NOT_ACCEPTED=66
+EXIT_SUDO_PASSWORD_REQUIRED=67
+
+
+# This command is usually run on the controlling workstation, not remote
+attach_to_multiplexer () {
+    local multiplexer="${1}"
+    local target="${2:-LOCAL HOST}"
+
+    local -a handler
+    local -a command
+
+    local -a ssh_args
+
+    if is_true "${LOCAL}"; then
+        handler=(eval)
+    else
+        mapfile -t ssh_args < <(target_as_ssh_arguments "${target}")
+        handler=("${SSH_COMMAND}" '-t' '-q' "$(quoted "${ssh_args[@]}")" '--')
+    fi
+
+    case "${multiplexer}" in
+        tmux)
+            # shellcheck disable=SC2016
+            command=('tmux' '-S' "$(quoted "${TMUX_SOCK_PREFIX}-${OWNER_UID_SOURCE}")" 'attach')
+            ;;
+
+        # TODO screen
+    esac
+
+    msg_debug "Attaching via ${handler[*]}" "${ANSI_FG_BRIGHT_BLUE}"
+    msg_debug "Attach command: ${command[*]}"
+
+    eval "${handler[@]}" "${command[@]}"
+}
+
+ask_sudo_password () {
+    local sudo_password
+
+    if is_true "${SUDO_PASSWORD_ON_STDIN}"; then
+        read -r sudo_password
+    else
+        sudo_password=$(interactive_secret "${1:-localhost}" "SUDO password")
+    fi
+
+    printf '%s\n' "${sudo_password}"
+}
 
 usage () {
     cat <<EOF
@@ -146,13 +197,15 @@ OPTIONS:
 EOF
 }
 
-
 environment_script () {
     # shellcheck disable=SC2034
     local CURRENT_TARGET="${1}"
 
-    local var fn pair paths macro path file_path
+    local var fn pair macro path file_path
 
+    local -a paths=()
+
+    # TODO: Check if we're taliking about quoted() or "" here
     # OWNER_UID_SOURCE is not quoted intentionally!
     cat <<EOF
 #!/usr/bin/env bash
@@ -265,6 +318,47 @@ EOF
 }
 
 
+handler_command () {
+    local -a force_sudo_password="${1}"
+    local -a handler=()
+
+    local -a command_environment=()
+
+    local packaged_pty_helper_script wrapper_command
+
+    if is_true "${DUMP_SCRIPT}"; then
+        handler=(cat)
+    else
+        if is_true "${LOCAL}"; then
+            handler=(eval)
+        else
+            mapfile -t ssh_args < <(target_as_ssh_arguments "${target}")
+            handler=("${SSH_COMMAND}" '-q' "${ssh_args[@]}" '--')
+        fi
+
+        if is_true "${SUDO}"; then
+            for var in SUDO_UID_VARIABLE EXIT_TIMEOUT EXIT_SUDO_PASSWORD_NOT_ACCEPTED EXIT_SUDO_PASSWORD_REQUIRED; do
+                command_environment+=("${var}=$(quoted "${!var}")")
+            done
+
+            packaged_pty_helper_script=$(gzip <"${AUTOMATED_LIBDIR%/}/pty_helper.py" | base64_encode)
+            wrapper_command="\"\${PYTHON_INTERPRETER}\" <(\"\${PYTHON_INTERPRETER}\" -m base64 -d <<< ${packaged_pty_helper_script} | gunzip)"
+
+            handler+=("PYTHON_INTERPRETER=\$(command -v python3 || command -v python2) && ${command_environment[*]} ${wrapper_command}")
+
+            if ! is_true "${force_sudo_password}" && is_true "${SUDO_PASSWORDLESS}"; then
+                handler+=("--sudo-passwordless")
+            fi
+        fi
+
+        handler+=(bash)
+    fi
+
+    msg_debug "Executing via $(quoted ${handler[*]})" "${ANSI_FG_BRIGHT_BLUE}"
+    "${handler[@]}"
+}
+
+
 execute () {
     local command="${1}"
     local target="${2:-LOCAL HOST}"
@@ -275,23 +369,8 @@ execute () {
     local handler rc do_attach multiplexer
     local -a output_processor
 
-    local -a ssh_args
-
     # Loop until SUDO password is accepted
     while true; do
-
-        if is_true "${DUMP_SCRIPT}"; then
-            handler=(cat)
-        else
-            if is_true "${LOCAL}"; then
-                handler=(eval)
-            else
-                mapfile -t ssh_args < <(target_as_ssh_arguments "${target}")
-                handler=("${SSH_COMMAND}" '-q' "$(quoted "${ssh_args[@]}")" '--')
-            fi
-
-            handler+=("$(quoted "$(in_proper_context bash "${force_sudo_password}")")")
-        fi
 
         sudo_password=''
 
@@ -314,8 +393,7 @@ execute () {
         set +e
         (
             set -e
-            msg_debug "Executing via ${handler[*]}" "${ANSI_FG_BRIGHT_BLUE}"
-            eval "${handler[@]}" > >("${output_processor[@]}") 2> >("${output_processor[@]}" >&2) < <(rendered_script "${target}" "${command}")
+            handler_command "${force_sudo_password}" > >("${output_processor[@]}") 2> >("${output_processor[@]}" >&2) < <(rendered_script "${target}" "${command}")
         )
         rc="$?"
         set -e
@@ -544,7 +622,7 @@ parse_args () {
 main () {
     local rc target
 
-    [[ "${#}" -gt 0 ]] || exit_after 1 usage | to_stderr
+    [[ "${#}" -gt 0 ]] || exit_after 1 usage >&2
 
     parse_args "$@"
 
@@ -572,5 +650,14 @@ main () {
 
 
 if [[ -n "${BASH_SOURCE[0]:-}" && "${0}" = "${BASH_SOURCE[0]}" ]]; then
+
+    AUTOMATED_PROG=$(basename "${BASH_SOURCE[0]:-}")
+    AUTOMATED_PROG_DIR=$(dirname "${BASH_SOURCE[0]:-}")
+
+    # shellcheck source=automated-config.sh
+    source "${AUTOMATED_PROG_DIR%/}/automated-config.sh"
+    # shellcheck source=libautomated.sh
+    source "${AUTOMATED_LIBDIR%/}/libautomated.sh"
+
     main "${@}"
 fi

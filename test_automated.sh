@@ -18,7 +18,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 __DOC__='
-Unit-test libautomated.sh
+Unit-test automated.sh
 This script uses shelter.sh as the testing framework. Please see
 https://github.com/node13h/shelter for more information'
 
@@ -29,8 +29,13 @@ PROG_DIR=$(dirname "${BASH_SOURCE[0]:-}")
 # shellcheck disable=SC1091
 source shelter.sh
 
+export AUTOMATED_LIBDIR="${PROG_DIR%/}"
+
 # shellcheck disable=SC1090
 source "${PROG_DIR%/}/libautomated.sh"
+
+# shellcheck disable=SC1090
+source "${PROG_DIR%/}/automated.sh"
 
 test_file_as_function_file () {
     declare rc temp_file temp_file_quoted owner mode
@@ -593,7 +598,7 @@ main () {
 
     if [[ -n "${ENABLE_CI_MODE:-}" ]]; then
         mkdir -p junit
-        shelter_run_test_suite suite | shelter_junit_formatter >junit/test_libautomated.xml
+        shelter_run_test_suite suite | shelter_junit_formatter >junit/test_automated.xml
     else
         shelter_run_test_suite suite | shelter_human_formatter
     fi

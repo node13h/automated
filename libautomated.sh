@@ -27,24 +27,11 @@ set -euo pipefail
 DEBUG=FALSE
 DISABLE_COLOUR=FALSE
 
-SSH_COMMAND='ssh'
-
-SUDO=FALSE
-SUDO_PASSWORDLESS=FALSE
-SUDO_PASSWORD_ON_STDIN=FALSE
-SUDO_ASK_PASSWORD_CMD=ask_sudo_password
-
-EXIT_TIMEOUT=65
-EXIT_SUDO_PASSWORD_NOT_ACCEPTED=66
-EXIT_SUDO_PASSWORD_REQUIRED=67
 EXIT_RUNNING_IN_TMUX=68
 # TODO EXIT_RUNNING_IN_SCREEN=69
 EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX=70
 
 SUPPORTED_MULTIPLEXERS=(tmux)
-
-SUDO_UID_VARIABLE='AUTOMATED_SUDO_UID'
-OWNER_UID_SOURCE="\${${SUDO_UID_VARIABLE}:-\$(id -u)}"
 
 TMUX_SOCK_PREFIX='/tmp/tmux-automated'
 TMUX_FIFO_PREFIX='/tmp/tmux-fifo'
@@ -298,38 +285,6 @@ file_mtime () {
     esac
 }
 
-# This command is usually run on the controlling workstation, not remote
-attach_to_multiplexer () {
-    local multiplexer="${1}"
-    local target="${2:-LOCAL HOST}"
-
-    local -a handler
-    local -a command
-
-    local -a ssh_args
-
-    if is_true "${LOCAL}"; then
-        handler=(eval)
-    else
-        mapfile -t ssh_args < <(target_as_ssh_arguments "${target}")
-        handler=("${SSH_COMMAND}" '-t' '-q' "$(quoted "${ssh_args[@]}")" '--')
-    fi
-
-    case "${multiplexer}" in
-        tmux)
-            # shellcheck disable=SC2016
-            command=('tmux' '-S' "$(quoted "${TMUX_SOCK_PREFIX}-${OWNER_UID_SOURCE}")" 'attach')
-            ;;
-
-        # TODO screen
-    esac
-
-    msg_debug "Attaching via ${handler[*]}" "${ANSI_FG_BRIGHT_BLUE}"
-    msg_debug "Attach command: ${command[*]}"
-
-    eval "${handler[@]}" "${command[@]}"
-}
-
 tmux_command () {
     msg_debug "tmux command ${*} over the ${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID} socket" \
               "${ANSI_FG_BRIGHT_BLUE}"
@@ -403,6 +358,7 @@ run_in_multiplexer () {
     esac
 }
 
+# TODO: Fix quoting
 interactive_multiplexer_session () {
     run_in_multiplexer "bash -i -s -- <(bootstrap_environment "$CURRENT_TARGET") <<< $(quoted 'source $1; exec </dev/tty')"
 }
@@ -456,18 +412,6 @@ confirm () {
     done
 }
 
-ask_sudo_password () {
-    local sudo_password
-
-    if is_true "${SUDO_PASSWORD_ON_STDIN}"; then
-        read -r sudo_password
-    else
-        sudo_password=$(interactive_secret "${1:-localhost}" "SUDO password")
-    fi
-
-    printf '%s\n' "${sudo_password}"
-}
-
 target_as_vars () {
     local target="${1}"
     local username_var="${2:-username}"
@@ -487,6 +431,7 @@ target_as_vars () {
     fi
 }
 
+# TODO: Add port number to the address
 target_address_only () {
     local target="${1}"
     local username address port
@@ -516,40 +461,10 @@ target_as_ssh_arguments () {
     printf '%s\n' "${args[@]}"
 }
 
-pty_helper_script () {
-    cat "${AUTOMATED_LIBDIR%/}/pty_helper.py"
-}
+is_function () {
+    local name="${1}"
 
-pty_helper_settings () {
-    local var
-    local -a result=()
-
-    for var in SUDO_UID_VARIABLE EXIT_TIMEOUT EXIT_SUDO_PASSWORD_NOT_ACCEPTED EXIT_SUDO_PASSWORD_REQUIRED; do
-        result+=("${var}=$(quoted "${!var}")")
-    done
-
-    printf '%s\n' "${result[*]}"
-}
-
-in_proper_context () {
-    # shellcheck disable=SC2178
-    local command="${1}"
-    local force_sudo_password="${2:-FALSE}"
-    # shellcheck disable=SC2016
-    local cmdline=('PYTHON_INTERPRETER=$(command -v python3) || PYTHON_INTERPRETER=$(command -v python2);')
-
-    if is_true "${SUDO}"; then
-        cmdline+=("$(pty_helper_settings) \"\${PYTHON_INTERPRETER}\" <(\"\${PYTHON_INTERPRETER}\" -m base64 -d <<< $(pty_helper_script | gzip | base64_encode) | gunzip)")
-
-        if ! is_true "${force_sudo_password}" && is_true "${SUDO_PASSWORDLESS}"; then
-            cmdline+=("--sudo-passwordless")
-        fi
-    fi
-
-    # shellcheck disable=SC2128
-    cmdline+=("${command}")
-
-    printf '%s\n' "${cmdline[*]}"
+    [[ "$(type -t "${name}")" = 'function' ]]
 }
 
 file_as_code () {
@@ -588,38 +503,6 @@ ${boundary}
 chmod ${mode} $(quoted "${dst}")
 msg_debug $(quoted "copied ${src} to ${dst} on the target")
 EOF
-}
-
-is_function () {
-    local name="${1}"
-
-    [[ "$(type -t "${name}")" = 'function' ]]
-}
-
-drop () {
-    local file_id="${1}"
-    local dst="${2:-}"
-
-    local file_id_hash original_mode
-
-    file_id_hash=$(md5 <<< "${file_id}")
-
-    is_function "drop_${file_id_hash}_body" || throw "File id ${file_id} is not dragged"
-
-    if [[ -n "${dst}" ]]; then
-        original_mode=$("drop_${file_id_hash}_mode")
-
-        local mode="${3:-${original_mode}}"
-
-        touch "${dst}"
-        chmod 0600 "${dst}"
-
-        "drop_${file_id_hash}_body" "${file_id}" >"${dst}"
-
-        chmod "${mode}" "${dst}"
-    else
-        "drop_${file_id_hash}_body" "${file_id}"
-    fi
 }
 
 
@@ -669,20 +552,6 @@ msg_debug $(quoted "shipped ${src} as the file id ${file_id}")
 EOF
 }
 
-sourced_drop () {
-    local file_id="${1}"
-
-    local file_id_hash
-
-    file_id_hash=$(md5 <<< "${file_id}")
-
-    cat <<EOF
-is_function "drop_${file_id_hash}_body" || throw $(quoted "File id ${file_id} is not dragged")
-source <(drop_${file_id_hash}_body)
-msg_debug $(quoted "sourced file id ${file_id}")
-EOF
-}
-
 declared_var () {
     local var="${1}"
 
@@ -695,6 +564,46 @@ declared_function () {
 
     declare -f "${fn}"
     printf 'msg_debug "declared function %s"\n' "$(quoted "${fn}")"
+}
+
+drop () {
+    local file_id="${1}"
+    local dst="${2:-}"
+
+    local file_id_hash original_mode
+
+    file_id_hash=$(md5 <<< "${file_id}")
+
+    is_function "drop_${file_id_hash}_body" || throw "File id ${file_id} is not dragged"
+
+    if [[ -n "${dst}" ]]; then
+        original_mode=$("drop_${file_id_hash}_mode")
+
+        local mode="${3:-${original_mode}}"
+
+        touch "${dst}"
+        chmod 0600 "${dst}"
+
+        "drop_${file_id_hash}_body" "${file_id}" >"${dst}"
+
+        chmod "${mode}" "${dst}"
+    else
+        "drop_${file_id_hash}_body" "${file_id}"
+    fi
+}
+
+sourced_drop () {
+    local file_id="${1}"
+
+    local file_id_hash
+
+    file_id_hash=$(md5 <<< "${file_id}")
+
+    cat <<EOF
+is_function "drop_${file_id_hash}_body" || throw $(quoted "File id ${file_id} is not dragged")
+source <(drop_${file_id_hash}_body)
+msg_debug $(quoted "sourced file id ${file_id}")
+EOF
 }
 
 exit_after () {
