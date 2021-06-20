@@ -353,9 +353,9 @@ run_in_multiplexer () {
     esac
 }
 
-# TODO: Fix quoting
+# shellcheck disable=SC2016
 interactive_multiplexer_session () {
-    run_in_multiplexer "bash -i -s -- <(automated_bootstrap_environment "$AUTOMATED_CURRENT_TARGET") <<< $(quoted 'source $1; exec </dev/tty')"
+    run_in_multiplexer "bash -i -s -- <(automated_bootstrap_environment $(quoted "$AUTOMATED_CURRENT_TARGET")) <<< $(quoted 'source $1; exec </dev/tty')"
 }
 
 interactive_answer () {
