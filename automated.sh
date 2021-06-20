@@ -72,7 +72,7 @@ attach_to_multiplexer () {
     case "${multiplexer}" in
         tmux)
             # shellcheck disable=SC2016
-            command=('tmux' '-S' "$(quoted "${TMUX_SOCK_PREFIX}-${OWNER_UID_SOURCE}")" 'attach')
+            command=('tmux' '-S' "$(quoted "${AUTOMATED_TMUX_SOCK_PREFIX}-${OWNER_UID_SOURCE}")" 'attach')
             ;;
 
         # TODO screen
@@ -181,12 +181,11 @@ OPTIONS:
                               anything. Implies the local operation.
   --tmux-sock-prefix PATH     Use custom PATH prefix for tmux socket on the
                               target.
-                              Default: ${TMUX_SOCK_PREFIX}
+                              Default: ${AUTOMATED_TMUX_SOCK_PREFIX}
   --tmux-fifo-prefix PATH     Use custom PATH prefix for the FIFO object to use
                               for communicating with tmux.
-                              Default: ${TMUX_FIFO_PREFIX}
+                              Default: ${AUTOMATED_TMUX_FIFO_PREFIX}
                               target.
-                              Default: ${TMUX_SOCK_PREFIX}
   --prefix-target-output      Prefix all output from every target with
                               a "TARGET: "
   --ssh-command               Set the ssh client command. One of the use cases
@@ -197,9 +196,9 @@ OPTIONS:
 EOF
 }
 
-environment_script () {
+automated_environment_script () {
     # shellcheck disable=SC2034
-    local CURRENT_TARGET="${1}"
+    local AUTOMATED_CURRENT_TARGET="${1}"
 
     local var fn pair macro path file_path
 
@@ -218,9 +217,9 @@ EOF
                      '__automated_libautomated'
     sourced_drop '__automated_libautomated'
 
-    declared_var DEBUG
-    declared_var CURRENT_TARGET
-    declared_var TMUX_SOCK_PREFIX
+    declared_var AUTOMATED_DEBUG
+    declared_var AUTOMATED_CURRENT_TARGET
+    declared_var AUTOMATED_TMUX_SOCK_PREFIX
     declared_var AUTOMATED_VERSION
 
     if [[ "${#EXPORT_VARS[@]}" -gt 0 ]]; then
@@ -282,7 +281,7 @@ rendered_script () {
         fi
     fi
 
-    bootstrap_environment "${target}"
+    automated_bootstrap_environment "${target}"
 
     if [[ "${#COPY_PAIRS[@]}" -gt 0 ]]; then
         for pair in "${COPY_PAIRS[@]}"; do
@@ -424,13 +423,13 @@ execute () {
             msg "Timeout while connecting to ${target}"
             ;;
 
-        "${EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX}")
+        "${AUTOMATED_EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX}")
             msg "Terminal multiplexer appears to be already running. Attaching ..."
             do_attach=TRUE
             multiplexer='tmux'
             ;;
 
-        "${EXIT_RUNNING_IN_TMUX}")
+        "${AUTOMATED_EXIT_RUNNING_IN_TMUX}")
             do_attach="${AUTO_ATTACH}"
             multiplexer='tmux'
             ;;
@@ -460,7 +459,7 @@ parse_args () {
                 ;;
 
             -v|--verbose)
-                DEBUG=TRUE
+                AUTOMATED_DEBUG=TRUE
                 ;;
 
             --ssh-command)
@@ -503,12 +502,12 @@ parse_args () {
                 ;;
 
             --tmux-sock-prefix)
-                TMUX_SOCK_PREFIX="${2}"
+                AUTOMATED_TMUX_SOCK_PREFIX="${2}"
                 shift
                 ;;
 
             --tmux-fifo-prefix)
-                TMUX_FIFO_PREFIX="${2}"
+                AUTOMATED_TMUX_FIFO_PREFIX="${2}"
                 shift
                 ;;
 

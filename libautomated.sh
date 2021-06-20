@@ -24,17 +24,18 @@
 
 set -euo pipefail
 
-DEBUG=FALSE
-DISABLE_COLOUR=FALSE
+AUTOMATED_DEBUG=FALSE
+AUTOMATED_DISABLE_COLOUR=FALSE
 
-EXIT_RUNNING_IN_TMUX=68
-# TODO EXIT_RUNNING_IN_SCREEN=69
-EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX=70
+AUTOMATED_EXIT_RUNNING_IN_TMUX=68
+AUTOMATED_EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX=69
 
-SUPPORTED_MULTIPLEXERS=(tmux)
+AUTOMATED_SUPPORTED_MULTIPLEXERS=(tmux)
 
-TMUX_SOCK_PREFIX='/tmp/tmux-automated'
-TMUX_FIFO_PREFIX='/tmp/tmux-fifo'
+AUTOMATED_TMUX_SOCK_PREFIX='/tmp/tmux-automated'
+AUTOMATED_TMUX_FIFO_PREFIX='/tmp/tmux-fifo'
+
+AUTOMATED_ANSWER_READ_COMMAND=('read' '-r')
 
 ANSI_FG_BLACK=30
 ANSI_FG_RED=31
@@ -54,10 +55,6 @@ ANSI_FG_BRIGHT_MAGENTA=95
 ANSI_FG_BRIGHT_CYAN=96
 ANSI_FG_BRIGHT_WHITE=97
 
-ANSWER_READ_COMMAND=('read' '-r')
-
-
-newline () { printf '\n'; }
 
 is_true () {
     [[ "${1,,}" =~ ^(yes|true|on|1)$ ]]
@@ -93,7 +90,7 @@ sed_replacement () {
 colorized () {
     local colour="${1}"
 
-    if is_true "${DISABLE_COLOUR}"; then
+    if is_true "${AUTOMATED_DISABLE_COLOUR}"; then
         cat
     else
         sed -e s/^/$'\e'\["${colour}"m/ -e s/$/$'\e'\[0m/
@@ -116,7 +113,7 @@ prefixed_lines () {
 to_debug () {
     local colour="${1:-${ANSI_FG_YELLOW}}"
 
-    if is_true "${DEBUG}"; then
+    if is_true "${AUTOMATED_DEBUG}"; then
         colorized "${colour}" >&2
     else
         cat >/dev/null
@@ -131,7 +128,7 @@ msg () {
     local msg="${1}"
     local colour="${2:-${ANSI_FG_WHITE}}"
 
-    if is_true "${DISABLE_COLOUR}"; then
+    if is_true "${AUTOMATED_DISABLE_COLOUR}"; then
         printf '%s\n' "${msg}" >&2
     else
         printf $'\e''[%sm%s'$'\e''[0m\n' "${colour}" "${msg}" >&2
@@ -142,7 +139,7 @@ msg_debug () {
     local msg="${1}"
     local colour="${2:-${ANSI_FG_YELLOW}}"
 
-    if is_true "${DEBUG}"; then
+    if is_true "${AUTOMATED_DEBUG}"; then
         msg "DEBUG ${msg}" "${colour}"
     fi
 }
@@ -286,15 +283,15 @@ file_mtime () {
 }
 
 tmux_command () {
-    msg_debug "tmux command ${*} over the ${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID} socket" \
+    msg_debug "tmux command ${*} over the ${AUTOMATED_TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID} socket" \
               "${ANSI_FG_BRIGHT_BLUE}"
-    tmux -S "${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}" "${@}"
+    tmux -S "${AUTOMATED_TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}" "${@}"
 }
 
 multiplexer_present () {
     local multiplexer
 
-    for multiplexer in "${SUPPORTED_MULTIPLEXERS[@]}"; do
+    for multiplexer in "${AUTOMATED_SUPPORTED_MULTIPLEXERS[@]}"; do
         if cmd_is_available "${multiplexer}"; then
             printf '%s\n' "${multiplexer}"
             return 0
@@ -309,11 +306,11 @@ run_in_tmux () {
 
     if tmux_command ls 2>/dev/null | to_debug; then
         msg_debug "Multiplexer is already running"
-        exit "${EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX}"
+        exit "${AUTOMATED_EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX}"
     fi
 
-    local sock_file="${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}"
-    local fifo_file="${TMUX_FIFO_PREFIX}-${AUTOMATED_OWNER_UID}"
+    local sock_file="${AUTOMATED_TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}"
+    local fifo_file="${AUTOMATED_TMUX_FIFO_PREFIX}-${AUTOMATED_OWNER_UID}"
 
     msg_debug "Starting multiplexer and executing commands"
 
@@ -330,7 +327,7 @@ run_in_tmux () {
         cat <<EOF
 rm -f -- $(quoted "${fifo_file}")
 EOF
-        bootstrap_environment "${CURRENT_TARGET}"
+        automated_bootstrap_environment "${AUTOMATED_CURRENT_TARGET}"
 
         cat <<EOF
 ${command}
@@ -339,28 +336,26 @@ EOF
 
     chown "${AUTOMATED_OWNER_UID}" "${sock_file}"
 
-    exit "${EXIT_RUNNING_IN_TMUX}"
+    exit "${AUTOMATED_EXIT_RUNNING_IN_TMUX}"
 }
 
 run_in_multiplexer () {
     local multiplexer
 
     if ! multiplexer=$(multiplexer_present); then
-        throw "Multiplexer is not available. Please install one of the following: ${SUPPORTED_MULTIPLEXERS[*]}"
+        throw "Multiplexer is not available. Please install one of the following: ${AUTOMATED_SUPPORTED_MULTIPLEXERS[*]}"
     fi
 
     case "${multiplexer}" in
         tmux)
             run_in_tmux "${@}"
             ;;
-
-        # TODO screen
     esac
 }
 
 # TODO: Fix quoting
 interactive_multiplexer_session () {
-    run_in_multiplexer "bash -i -s -- <(bootstrap_environment "$CURRENT_TARGET") <<< $(quoted 'source $1; exec </dev/tty')"
+    run_in_multiplexer "bash -i -s -- <(automated_bootstrap_environment "$AUTOMATED_CURRENT_TARGET") <<< $(quoted 'source $1; exec </dev/tty')"
 }
 
 interactive_answer () {
@@ -375,7 +370,7 @@ interactive_answer () {
 
     {
         printf '%s: ' "${message[*]}"
-        "${ANSWER_READ_COMMAND[@]}" answer
+        "${AUTOMATED_ANSWER_READ_COMMAND[@]}" answer
         newline
 
     } </dev/tty >/dev/tty
@@ -388,7 +383,7 @@ interactive_answer () {
 }
 
 interactive_secret () {
-    local -a ANSWER_READ_COMMAND=('read' '-r' '-s')
+    local -a AUTOMATED_ANSWER_READ_COMMAND=('read' '-r' '-s')
 
     interactive_answer "${@}"
 }
@@ -686,7 +681,7 @@ supported_automated_versions () {
     fi
 }
 
-bootstrap_environment () {
+automated_bootstrap_environment () {
     local target="${1}"
 
     cat <<EOF
@@ -700,7 +695,7 @@ msg_debug () {
 }
 
 # Inception :)
-environment_script () {
+automated_environment_script () {
     drop '__automated_environment'
 }
 
@@ -712,7 +707,7 @@ EOF
     declared_function 'is_function'
     declared_function 'throw'
 
-    file_as_function <(environment_script "${target}") \
+    file_as_function <(automated_environment_script "${target}") \
                      '__automated_environment'
     sourced_drop '__automated_environment'
 }

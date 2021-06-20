@@ -356,13 +356,13 @@ EOF
 
 test_bootstrap_environment_correct () {
     (
-        environment_script () {
+        automated_environment_script () {
             cat <<EOF
 echo "environment for ${1}"
 EOF
         }
 
-        assert_stdout 'source <(bootstrap_environment my-target)' - <<"EOF"
+        assert_stdout 'source <(automated_bootstrap_environment my-target)' - <<"EOF"
 environment for my-target
 EOF
     )
@@ -370,13 +370,13 @@ EOF
 
 test_bootstrap_environment_includes_environment_script () {
     (
-        environment_script () {
+        automated_environment_script () {
             cat <<EOF
 echo "environment for ${1}"
 EOF
         }
 
-        assert_stdout 'source <(bootstrap_environment my-target); environment_script' - <<"EOF"
+        assert_stdout 'source <(automated_bootstrap_environment my-target); automated_environment_script' - <<"EOF"
 environment for my-target
 echo "environment for my-target"
 EOF
