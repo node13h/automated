@@ -418,9 +418,9 @@ target_as_vars () {
 
     if [[ "${target}" =~ ^((.+)@)?(\[([:0-9A-Fa-f]+)\])(:([0-9]+))?$ ]] ||
            [[ "${target}" =~ ^((.+)@)?(([-.0-9A-Za-z]+))(:([0-9]+))?$ ]]; then
-        printf '%s=%s\n' "${username_var}" "$(quoted "${BASH_REMATCH[2]}")"
-        printf '%s=%s\n' "${address_var}" "$(quoted "${BASH_REMATCH[4]}")"
-        printf '%s=%s\n' "${port_var}" "$(quoted "${BASH_REMATCH[6]}")"
+        printf '%s=%q\n' "${username_var}" "${BASH_REMATCH[2]}"
+        printf '%s=%q\n' "${address_var}" "${BASH_REMATCH[4]}"
+        printf '%s=%q\n' "${port_var}" "${BASH_REMATCH[6]}"
     else
         return 1
     fi
