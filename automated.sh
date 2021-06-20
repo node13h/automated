@@ -78,7 +78,7 @@ attach_to_multiplexer () {
         # TODO screen
     esac
 
-    msg_debug "Attaching via ${handler[*]}" "${ANSI_FG_BRIGHT_BLUE}"
+    msg_debug "Attaching via ${handler[*]}" BRIGHT_BLUE
     msg_debug "Attach command: ${command[*]}"
 
     eval "${handler[@]}" "${command[@]}"
@@ -353,7 +353,7 @@ handler_command () {
         handler+=(bash)
     fi
 
-    msg_debug "Executing via $(quoted ${handler[*]})" "${ANSI_FG_BRIGHT_BLUE}"
+    msg_debug "Executing via $(quoted "${handler[*]}")" BRIGHT_BLUE
     "${handler[@]}"
 }
 

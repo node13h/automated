@@ -37,24 +37,6 @@ AUTOMATED_TMUX_FIFO_PREFIX='/tmp/tmux-fifo'
 
 AUTOMATED_ANSWER_READ_COMMAND=('read' '-r')
 
-ANSI_FG_BLACK=30
-ANSI_FG_RED=31
-ANSI_FG_GREEN=32
-ANSI_FG_YELLOW=33
-ANSI_FG_BLUE=34
-ANSI_FG_MAGENTA=35
-ANSI_FG_CYAN=36
-ANSI_FG_WHITE=37
-
-ANSI_FG_BRIGHT_BLACK=90
-ANSI_FG_BRIGHT_RED=91
-ANSI_FG_BRIGHT_GREEN=92
-ANSI_FG_BRIGHT_YELLOW=93
-ANSI_FG_BRIGHT_BLUE=94
-ANSI_FG_BRIGHT_MAGENTA=95
-ANSI_FG_BRIGHT_CYAN=96
-ANSI_FG_BRIGHT_WHITE=97
-
 
 is_true () {
     [[ "${1,,}" =~ ^(yes|true|on|1)$ ]]
@@ -88,12 +70,33 @@ sed_replacement () {
 }
 
 colorized () {
-    local colour="${1}"
+    local fg_colour="${1}"
+
+    local -A colour_mappings=(
+        [BLACK]=30
+        [RED]=31
+        [GREEN]=32
+        [YELLOW]=33
+        [BLUE]=34
+        [MAGENTA]=35
+        [CYAN]=36
+        [WHITE]=37
+        [BRIGHT_BLACK]=90
+        [BRIGHT_RED]=91
+        [BRIGHT_GREEN]=92
+        [BRIGHT_YELLOW]=93
+        [BRIGHT_BLUE]=94
+        [BRIGHT_MAGENTA]=95
+        [BRIGHT_CYAN]=96
+        [BRIGHT_WHITE]=97
+    )
+
+    [[ -n "${colour_mappings[$fg_colour]:-}" ]] || throw "Invalid colour ${fg_colour}"
 
     if is_true "${AUTOMATED_DISABLE_COLOUR}"; then
         cat
     else
-        sed -e s/^/$'\e'\["${colour}"m/ -e s/$/$'\e'\[0m/
+        sed -e s/^/$'\e'\["${colour_mappings[${fg_colour}]}"m/ -e s/$/$'\e'\[0m/
     fi
 }
 
@@ -111,10 +114,10 @@ prefixed_lines () {
 
 # shellcheck disable=SC2120
 to_debug () {
-    local colour="${1:-${ANSI_FG_YELLOW}}"
+    local fg_colour="${1:-YELLOW}"
 
     if is_true "${AUTOMATED_DEBUG}"; then
-        colorized "${colour}" >&2
+        colorized "${fg_colour}" >&2
     else
         cat >/dev/null
     fi
@@ -126,28 +129,23 @@ pipe_debug () {
 
 msg () {
     local msg="${1}"
-    local colour="${2:-${ANSI_FG_WHITE}}"
 
-    if is_true "${AUTOMATED_DISABLE_COLOUR}"; then
-        printf '%s\n' "${msg}" >&2
-    else
-        printf $'\e''[%sm%s'$'\e''[0m\n' "${colour}" "${msg}" >&2
-    fi
+    printf '%s\n' "$msg" | colorized WHITE >&2
 }
 
 msg_debug () {
     local msg="${1}"
-    local colour="${2:-${ANSI_FG_YELLOW}}"
+    local fg_colour="${2:-YELLOW}"
 
     if is_true "${AUTOMATED_DEBUG}"; then
-        msg "DEBUG ${msg}" "${colour}"
+        printf 'DEBUG %s\n' "$msg" | colorized "${fg_colour}" >&2
     fi
 }
 
 throw () {
     local msg="${1}"
 
-    printf '%s\n' "${msg}" >&2
+    printf '%s\n' "${msg}" | colorized RED >&2
     exit 1
 }
 
@@ -165,11 +163,11 @@ to_file () {
     mtime_before=$(file_mtime "${target_path}" 2>/dev/null) || mtime_before=0
 
     if cmd_is_available 'diff' && cmd_is_available 'patch'; then
-        diff -duaN "${target_path}" - | tee >(printable_only | text_block "${1}" | to_debug "${ANSI_FG_BRIGHT_BLACK}") | patch --binary -s -p0 "$target_path"
+        diff -duaN "${target_path}" - | tee >(printable_only | text_block "${1}" | to_debug BRIGHT_BLACK) | patch --binary -s -p0 "$target_path"
     else
         msg_debug 'Please consider installing patch and diff commands to enable diff support for to_file()'
 
-        tee >(printable_only | text_block "${1}" | to_debug "${ANSI_FG_BRIGHT_BLACK}") >"${target_path}"
+        tee >(printable_only | text_block "${1}" | to_debug BRIGHT_BLACK) >"${target_path}"
     fi
 
     mtime_after=$(file_mtime "${target_path}")
@@ -213,7 +211,7 @@ joined () {
 }
 
 cmd () {
-    msg_debug "CMD $(quoted "${@}")" "${ANSI_FG_GREEN}"
+    msg_debug "CMD $(quoted "${@}")" GREEN
 
     "${@}"
 }
@@ -283,8 +281,7 @@ file_mtime () {
 }
 
 tmux_command () {
-    msg_debug "tmux command ${*} over the ${AUTOMATED_TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID} socket" \
-              "${ANSI_FG_BRIGHT_BLUE}"
+    msg_debug "tmux command ${*} over the ${AUTOMATED_TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID} socket" BRIGHT_BLUE
     tmux -S "${AUTOMATED_TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}" "${@}"
 }
 
