@@ -127,7 +127,7 @@ pipe_debug () {
     tee >(to_debug)
 }
 
-msg () {
+msg_info () {
     local msg="${1}"
 
     printf '%s\n' "$msg" | colorized WHITE >&2

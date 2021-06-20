@@ -418,11 +418,11 @@ execute () {
 
     case "${rc}" in
         "${EXIT_TIMEOUT}")
-            msg "Timeout while connecting to ${target}"
+            throw "Timeout while connecting to ${target}"
             ;;
 
         "${AUTOMATED_EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX}")
-            msg "Terminal multiplexer appears to be already running. Attaching ..."
+            msg_info "Terminal multiplexer appears to be already running. Attaching ..."
             do_attach=TRUE
             multiplexer='tmux'
             ;;
