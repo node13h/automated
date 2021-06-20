@@ -45,7 +45,6 @@ SUDO_PASSWORD_ON_STDIN=FALSE
 SUDO_ASK_PASSWORD_CMD=ask_sudo_password
 
 SUDO_UID_VARIABLE='AUTOMATED_SUDO_UID'
-OWNER_UID_SOURCE="\${${SUDO_UID_VARIABLE}:-\$(id -u)}"
 
 EXIT_TIMEOUT=65
 EXIT_SUDO_PASSWORD_NOT_ACCEPTED=66
@@ -202,14 +201,12 @@ automated_environment_script () {
 
     local -a paths=()
 
-    # TODO: Check if we're taliking about quoted() or "" here
-    # OWNER_UID_SOURCE is not quoted intentionally!
     cat <<EOF
 #!/usr/bin/env bash
 
 set -euo pipefail
 
-AUTOMATED_OWNER_UID=${OWNER_UID_SOURCE}
+AUTOMATED_OWNER_UID="\${${SUDO_UID_VARIABLE}:-\$(id -u)}"
 EOF
     file_as_function "${AUTOMATED_LIBDIR%/}/libautomated.sh" \
                      '__automated_libautomated'
