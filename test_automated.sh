@@ -66,7 +66,7 @@ drop_85f3735d27bcffbd74d4d5b092e52da0_mode () {
 drop_85f3735d27bcffbd74d4d5b092e52da0_owner () {
     printf '%s\n' '${owner}'
 }
-msg_debug shipped\ ${temp_file_quoted}\ as\ the\ file\ id\ my-file-id
+log_debug shipped\ ${temp_file_quoted}\ as\ the\ file\ id\ my-file-id
 EOF
     )
     rc="$?"
@@ -107,7 +107,7 @@ drop_${name_md5}_mode () {
 drop_${name_md5}_owner () {
     printf '%s\n' '${owner}'
 }
-msg_debug shipped\ ${temp_file_quoted}\ as\ the\ file\ id\ ${temp_file_quoted}
+log_debug shipped\ ${temp_file_quoted}\ as\ the\ file\ id\ ${temp_file_quoted}
 EOF
     )
     rc="$?"
@@ -139,7 +139,7 @@ drop_85f3735d27bcffbd74d4d5b092e52da0_mode () {
 drop_85f3735d27bcffbd74d4d5b092e52da0_owner () {
     printf '%s\n' '${owner}'
 }
-msg_debug shipped\ /dev/fd/0\ as\ the\ file\ id\ my-file-id
+log_debug shipped\ /dev/fd/0\ as\ the\ file\ id\ my-file-id
 EOF
 )
     } <<EOF
@@ -267,7 +267,7 @@ base64_decode <<"EOF-d075c6918aed70a32aaebbd10eb9ecab" | gzip -d >/tmp/dst
 H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
 EOF-d075c6918aed70a32aaebbd10eb9ecab
 chmod ${mode} /tmp/dst
-msg_debug copied\ ${temp_file_quoted}\ to\ /tmp/dst\ on\ the\ target
+log_debug copied\ ${temp_file_quoted}\ to\ /tmp/dst\ on\ the\ target
 EOF
     )
     rc="$?"
@@ -291,7 +291,7 @@ base64_decode <<"EOF-d075c6918aed70a32aaebbd10eb9ecab" | gzip -d >/tmp/dst
 H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
 EOF-d075c6918aed70a32aaebbd10eb9ecab
 chmod ${mode} /tmp/dst
-msg_debug copied\ /dev/fd/0\ to\ /tmp/dst\ on\ the\ target
+log_debug copied\ /dev/fd/0\ to\ /tmp/dst\ on\ the\ target
 EOF
 )
     } <<EOF
@@ -350,7 +350,7 @@ test_sourced_drop_correct () {
     assert_stdout 'sourced_drop my-file-id' - <<"EOF"
 is_function "drop_85f3735d27bcffbd74d4d5b092e52da0_body" || throw File\ id\ my-file-id\ is\ not\ dragged
 source <(drop_85f3735d27bcffbd74d4d5b092e52da0_body)
-msg_debug sourced\ file\ id\ my-file-id
+log_debug sourced\ file\ id\ my-file-id
 EOF
 }
 

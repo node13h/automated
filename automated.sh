@@ -76,8 +76,8 @@ attach_to_multiplexer () {
             ;;
     esac
 
-    msg_debug "Attaching via ${handler[*]}" BRIGHT_BLUE
-    msg_debug "Attach command: ${command[*]}"
+    log_debug "Attaching via ${handler[*]}" BRIGHT_BLUE
+    log_debug "Attach command: ${command[*]}"
 
     eval "${handler[@]}" "${command[@]}"
 }
@@ -294,7 +294,7 @@ rendered_script () {
         cat <<EOF
 {
     ${command}
-    msg_debug 'done'
+    log_debug 'done'
 
     # exit() is required so we don't try to execute the STDIN in case
     # no one has consumed it.
@@ -308,7 +308,7 @@ EOF
         cat <<EOF
 {
     ${command}
-    msg_debug 'done'
+    log_debug 'done'
 }
 EOF
     fi
@@ -351,7 +351,7 @@ handler_command () {
         handler+=(bash)
     fi
 
-    msg_debug "Executing via $(quoted "${handler[*]}")" BRIGHT_BLUE
+    log_debug "Executing via $(quoted "${handler[*]}")" BRIGHT_BLUE
     "${handler[@]}"
 }
 
@@ -379,7 +379,7 @@ execute () {
             fi
         fi
 
-        msg_debug "Executing on ${target}"
+        log_debug "Executing on ${target}"
 
         if is_true "${PREFIX_TARGET_OUTPUT}"; then
             output_processor=(prefixed_lines "${target}: ")
@@ -398,15 +398,15 @@ execute () {
         case "${rc}" in
             "${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}")
                 if is_true "${SUDO_PASSWORD_ON_STDIN}"; then
-                    msg_debug "SUDO password was provided on STDIN, but rejected by the target. Can't prompt, giving up"
+                    log_debug "SUDO password was provided on STDIN, but rejected by the target. Can't prompt, giving up"
                     break
                 else
-                    msg_debug 'SUDO password was rejected. Looping over'
+                    log_debug 'SUDO password was rejected. Looping over'
                 fi
                 ;;
 
             "${EXIT_SUDO_PASSWORD_REQUIRED}")
-                msg_debug "${target} requested the password for SUDO, disabling passwordless SUDO mode for this target and looping over."
+                log_debug "${target} requested the password for SUDO, disabling passwordless SUDO mode for this target and looping over."
                 force_sudo_password=TRUE
                 ;;
             *)
@@ -422,7 +422,7 @@ execute () {
             ;;
 
         "${AUTOMATED_EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX}")
-            msg_info "Terminal multiplexer appears to be already running. Attaching ..."
+            log_info "Terminal multiplexer appears to be already running. Attaching ..."
             do_attach=TRUE
             multiplexer='tmux'
             ;;
@@ -438,7 +438,7 @@ execute () {
     esac
 
     if is_true "${do_attach}"; then
-        msg_debug "Attaching to multiplexer (${multiplexer}) ..."
+        log_debug "Attaching to multiplexer (${multiplexer}) ..."
         attach_to_multiplexer "${multiplexer}" "${target}"
     fi
 }

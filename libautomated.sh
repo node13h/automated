@@ -127,13 +127,13 @@ pipe_debug () {
     tee >(to_debug)
 }
 
-msg_info () {
+log_info () {
     local msg="${1}"
 
     printf '%s\n' "$msg" | colorized WHITE >&2
 }
 
-msg_debug () {
+log_debug () {
     local msg="${1}"
     local fg_colour="${2:-YELLOW}"
 
@@ -165,7 +165,7 @@ to_file () {
     if cmd_is_available 'diff' && cmd_is_available 'patch'; then
         diff -duaN "${target_path}" - | tee >(printable_only | text_block "${1}" | to_debug BRIGHT_BLACK) | patch --binary -s -p0 "$target_path"
     else
-        msg_debug 'Please consider installing patch and diff commands to enable diff support for to_file()'
+        log_debug 'Please consider installing patch and diff commands to enable diff support for to_file()'
 
         tee >(printable_only | text_block "${1}" | to_debug BRIGHT_BLACK) >"${target_path}"
     fi
@@ -211,7 +211,7 @@ joined () {
 }
 
 cmd () {
-    msg_debug "CMD $(quoted "${@}")" GREEN
+    log_debug "CMD $(quoted "${@}")" GREEN
 
     "${@}"
 }
@@ -281,7 +281,7 @@ file_mtime () {
 }
 
 tmux_command () {
-    msg_debug "tmux command ${*} over the ${AUTOMATED_TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID} socket" BRIGHT_BLUE
+    log_debug "tmux command ${*} over the ${AUTOMATED_TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID} socket" BRIGHT_BLUE
     tmux -S "${AUTOMATED_TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}" "${@}"
 }
 
@@ -302,16 +302,16 @@ run_in_tmux () {
     local command="${1}"
 
     if tmux_command ls 2>/dev/null | to_debug; then
-        msg_debug "Multiplexer is already running"
+        log_debug "Multiplexer is already running"
         exit "${AUTOMATED_EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX}"
     fi
 
     local sock_file="${AUTOMATED_TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}"
     local fifo_file="${AUTOMATED_TMUX_FIFO_PREFIX}-${AUTOMATED_OWNER_UID}"
 
-    msg_debug "Starting multiplexer and executing commands"
+    log_debug "Starting multiplexer and executing commands"
 
-    msg_debug "$command"
+    log_debug "$command"
 
     mkfifo "${fifo_file}"
 
@@ -492,7 +492,7 @@ EOF
     cat <<EOF
 ${boundary}
 chmod ${mode} $(quoted "${dst}")
-msg_debug $(quoted "copied ${src} to ${dst} on the target")
+log_debug $(quoted "copied ${src} to ${dst} on the target")
 EOF
 }
 
@@ -539,7 +539,7 @@ drop_${file_id_hash}_mode () {
 drop_${file_id_hash}_owner () {
     printf '%s\n' '${owner}'
 }
-msg_debug $(quoted "shipped ${src} as the file id ${file_id}")
+log_debug $(quoted "shipped ${src} as the file id ${file_id}")
 EOF
 }
 
@@ -547,14 +547,14 @@ declared_var () {
     local var="${1}"
 
     declare -p "${var}"
-    printf 'msg_debug "declared variable %s"\n' "$(quoted "${var}")"
+    printf 'log_debug "declared variable %s"\n' "$(quoted "${var}")"
 }
 
 declared_function () {
     local fn="${1}"
 
     declare -f "${fn}"
-    printf 'msg_debug "declared function %s"\n' "$(quoted "${fn}")"
+    printf 'log_debug "declared function %s"\n' "$(quoted "${fn}")"
 }
 
 drop () {
@@ -593,7 +593,7 @@ sourced_drop () {
     cat <<EOF
 is_function "drop_${file_id_hash}_body" || throw $(quoted "File id ${file_id} is not dragged")
 source <(drop_${file_id_hash}_body)
-msg_debug $(quoted "sourced file id ${file_id}")
+log_debug $(quoted "sourced file id ${file_id}")
 EOF
 }
 
@@ -685,7 +685,7 @@ automated_bootstrap_environment () {
 
 set -euo pipefail
 
-msg_debug () {
+log_debug () {
     # Mock for the bootstrap envirnment
     return 0
 }
