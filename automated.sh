@@ -74,8 +74,6 @@ attach_to_multiplexer () {
             # shellcheck disable=SC2016
             command=('tmux' '-S' "$(quoted "${AUTOMATED_TMUX_SOCK_PREFIX}-${OWNER_UID_SOURCE}")" 'attach')
             ;;
-
-        # TODO screen
     esac
 
     msg_debug "Attaching via ${handler[*]}" BRIGHT_BLUE
@@ -434,7 +432,6 @@ execute () {
             multiplexer='tmux'
             ;;
 
-        # TODO screen
         *)
             return "${rc}"
             ;;
