@@ -37,6 +37,7 @@ AUTOMATED_TMUX_FIFO_PREFIX='/tmp/tmux-fifo'
 
 AUTOMATED_ANSWER_READ_COMMAND=('read' '-r')
 
+declare -A AUTOMATED_FUNCTIONS=()
 
 is_true () {
     [[ "${1,,}" =~ ^(yes|true|on|1)$ ]]
@@ -142,6 +143,32 @@ log_debug () {
     fi
 }
 
+log_cmd_trap () {
+    # shellcheck disable=SC2086
+    set -- $BASH_COMMAND
+
+    [[ "${#}" -gt 0 ]] || return 0
+
+    local current_command
+    current_command="${1}"
+
+    [[ "${#FUNCNAME[@]}" -gt 1 ]] || return 0
+
+    local parent_function
+    parent_function="${FUNCNAME[1]}"
+
+    ! [[ "${parent_function}"  == "${current_command}" ]] || return 0
+
+    [[ "${AUTOMATED_FUNCTIONS["${parent_function}"]:-}" == 'user' ]] || return 0
+
+    local current_command_type
+    current_command_type=$(type -t "${current_command}") || return 0
+
+    [[ "${current_command_type}" =~ file|function ]] || return 0
+
+    printf 'CMD %s(): %s\n' "${parent_function}" "$BASH_COMMAND" | head -n 1 | colorized GREEN >&2
+}
+
 throw () {
     local msg="${1}"
 
@@ -208,12 +235,6 @@ joined () {
     done
 
     printf '\n'
-}
-
-cmd () {
-    log_debug "CMD $(quoted "${@}")" GREEN
-
-    "${@}"
 }
 
 cmd_is_available () {

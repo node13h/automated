@@ -239,6 +239,14 @@ EOF
         done
     fi
 
+    cat <<"EOF"
+declare -A AUTOMATED_FUNCTIONS=()
+while read -r fn; do
+  AUTOMATED_FUNCTIONS["${fn}"]='base'
+done < <(declare -F | cut -f 3 -d ' ')
+
+EOF
+
     if [[ "${#LOAD_PATHS[@]}" -gt 0 ]]; then
         paths+=("${LOAD_PATHS[@]}")
     fi
@@ -256,6 +264,17 @@ EOF
             fi
         done
     fi
+
+    cat <<"EOF"
+while read -r fn; do
+  if [[ -z "${AUTOMATED_FUNCTIONS["${fn}"]:-}" ]]; then
+    AUTOMATED_FUNCTIONS["${fn}"]='user'
+  fi
+done < <(declare -F | cut -f 3 -d ' ')
+
+unset fn
+
+EOF
 
     if [[ "${#MACROS[@]}" -gt 0 ]]; then
         for macro in "${MACROS[@]}"; do
@@ -287,6 +306,14 @@ rendered_script () {
             file_as_code ${pair}
         done
     fi
+
+    cat <<"EOF"
+if is_true "${AUTOMATED_DEBUG}"; then
+  set -o functrace
+  trap log_cmd_trap DEBUG
+fi
+
+EOF
 
     # This block has to be the last block in the script as it
     # joins the STDIN of this script to the STDIN of the executed command
