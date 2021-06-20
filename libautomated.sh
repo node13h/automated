@@ -426,14 +426,13 @@ target_as_vars () {
     fi
 }
 
-# TODO: Add port number to the address
 target_address_only () {
     local target="${1}"
     local username address port
 
     eval "$(target_as_vars "${target}" username address port)"
 
-    printf '%s\n' "${address}"
+    printf '%s\n' "${address}${port:+:${port}}"
 }
 
 target_as_ssh_arguments () {

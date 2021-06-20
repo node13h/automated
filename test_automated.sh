@@ -464,6 +464,30 @@ address.example.com
 EOF
 }
 
+test_target_address_only_host () {
+    assert_stdout 'target_address_only address.example.com' - <<"EOF"
+address.example.com
+EOF
+}
+
+test_target_address_only_user_host () {
+    assert_stdout 'target_address_only user@address.example.com' - <<"EOF"
+address.example.com
+EOF
+}
+
+test_target_address_only_user_host_port () {
+    assert_stdout 'target_address_only user@address.example.com:22' - <<"EOF"
+address.example.com:22
+EOF
+}
+
+test_target_address_only_host_port () {
+    assert_stdout 'target_address_only address.example.com:22' - <<"EOF"
+address.example.com:22
+EOF
+}
+
 test_to_file_correct () {
     declare rc temp_dir
 
@@ -573,6 +597,7 @@ suite () {
     shelter_run_test_class automated test_bootstrap_environment_
     shelter_run_test_class automated test_supported_automated_versions_
     shelter_run_test_class automated test_target_as_ssh_arguments_
+    shelter_run_test_class automated test_target_address_only_
 }
 
 usage () {
