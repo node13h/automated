@@ -57,7 +57,7 @@ attach_to_multiplexer () {
     local target="${2:-LOCAL HOST}"
 
     local -a handler
-    local -a command
+    local command
 
     local -a ssh_args
 
@@ -65,20 +65,20 @@ attach_to_multiplexer () {
         handler=(eval)
     else
         mapfile -t ssh_args < <(target_as_ssh_arguments "${target}")
-        handler=("${SSH_COMMAND}" '-t' '-q' "$(quoted "${ssh_args[@]}")" '--')
+        handler=("${SSH_COMMAND}" '-t' '-q' "${ssh_args[@]}" '--')
     fi
 
     case "${multiplexer}" in
         tmux)
             # shellcheck disable=SC2016
-            command=('tmux' '-S' "$(quoted "${AUTOMATED_TMUX_SOCK_PREFIX}-${OWNER_UID_SOURCE}")" 'attach')
+            command="tmux -S $(quoted "${AUTOMATED_TMUX_SOCK_PREFIX}")-\"\$(id -u)\" attach"
             ;;
     esac
 
     log_debug "Attaching via ${handler[*]}" BRIGHT_BLUE
-    log_debug "Attach command: ${command[*]}"
+    log_debug "Attach command: ${command}"
 
-    eval "${handler[@]}" "${command[@]}"
+    "${handler[@]}" "${command}"
 }
 
 ask_sudo_password () {
