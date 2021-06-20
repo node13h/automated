@@ -29,13 +29,13 @@ PASS_STDIN=FALSE
 
 CMD='main'
 
-EXPORT_VARS=()
-EXPORT_FUNCTIONS=()
-LOAD_PATHS=()
-COPY_PAIRS=()
-DRAG_PAIRS=()
-MACROS=()
-TARGETS=()
+declare -a EXPORT_VARS=()
+declare -a EXPORT_FUNCTIONS=()
+declare -a LOAD_PATHS=()
+declare -a COPY_PAIRS=()
+declare -a DRAG_PAIRS=()
+declare -a MACROS=()
+declare -a TARGETS=()
 
 SSH_COMMAND='ssh'
 
