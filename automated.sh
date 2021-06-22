@@ -51,6 +51,10 @@ EXIT_SUDO_PASSWORD_NOT_ACCEPTED=66
 EXIT_SUDO_PASSWORD_REQUIRED=67
 
 
+ssh_command () {
+    eval "${SSH_COMMAND} $(quoted "${@}")"
+}
+
 # This command is usually run on the controlling workstation, not remote
 attach_to_multiplexer () {
     local multiplexer="${1}"
@@ -65,7 +69,7 @@ attach_to_multiplexer () {
         handler=(eval)
     else
         mapfile -t ssh_args < <(target_as_ssh_arguments "${target}")
-        handler=("${SSH_COMMAND}" '-t' '-q' "${ssh_args[@]}" '--')
+        handler=('ssh_command' '-t' '-q' "${ssh_args[@]}" '--')
     fi
 
     case "${multiplexer}" in
@@ -354,7 +358,7 @@ handler_command () {
             handler=(eval)
         else
             mapfile -t ssh_args < <(target_as_ssh_arguments "${target}")
-            handler=("${SSH_COMMAND}" '-q' "${ssh_args[@]}" '--')
+            handler=('ssh_command' '-q' "${ssh_args[@]}" '--')
         fi
 
         if is_true "${SUDO}"; then
