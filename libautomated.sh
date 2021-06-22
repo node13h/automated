@@ -567,7 +567,17 @@ EOF
 declared_var () {
     local var="${1}"
 
-    declare -p "${var}"
+    (
+        set -e
+
+        if [[ -n "${2+defined}" ]]; then
+            unset "${var}"
+            declare "${var}=${2}"
+        fi
+
+        declare -p "${var}"
+    )
+
     printf 'log_debug "declared variable %s"\n' "$(quoted "${var}")"
 }
 

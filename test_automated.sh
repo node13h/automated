@@ -585,6 +585,36 @@ test_to_file_no_patch_correct () {
     return "$rc"
 }
 
+test_declared_var_not_set () {
+    assert_fail 'declared_var THIS_VARIABLE_DOES_NOT_EXIST 2>/dev/null'
+}
+
+test_declared_var_string () {
+    declare FOO=bar
+
+    assert_stdout 'declared_var FOO' - <<EOF
+declare -- FOO="bar"
+log_debug "declared variable FOO"
+EOF
+}
+
+test_declared_var_array () {
+    # shellcheck disable=SC2034
+    declare -a FOO=(bar baz)
+
+    assert_stdout 'declared_var FOO' - <<EOF
+declare -a FOO=([0]="bar" [1]="baz")
+log_debug "declared variable FOO"
+EOF
+}
+
+test_declared_var_inline () {
+    assert_stdout 'declared_var FOO bar' - <<EOF
+declare -- FOO="bar"
+log_debug "declared variable FOO"
+EOF
+}
+
 suite () {
     shelter_run_test_class upload test_file_as_function_
     shelter_run_test_class upload test_drop_
@@ -594,6 +624,7 @@ suite () {
     shelter_run_test_class utility test_semver_matches_one_of_
     shelter_run_test_class utility test_joined_
     shelter_run_test_class utility test_to_file_
+    shelter_run_test_class utility test_declared_var_
     shelter_run_test_class automated test_bootstrap_environment_
     shelter_run_test_class automated test_supported_automated_versions_
     shelter_run_test_class automated test_target_as_ssh_arguments_
