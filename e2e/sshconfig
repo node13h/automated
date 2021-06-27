@@ -1,0 +1,6 @@
+Host *
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+  User testuser
+  IdentityAgent no
+  Port 2222

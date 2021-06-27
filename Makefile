@@ -26,6 +26,9 @@ SPEC_FILE := $(PROJECT).spec
 RPM_PACKAGE := bdist/noarch/$(PROJECT)-$(PKG_VERSION)-$(PKG_RELEASE).noarch.rpm
 DEB_PACKAGE := bdist/$(PROJECT)_$(VERSION)_all.deb
 
+CONTAINER_REGISTRY := docker.io
+CONTAINER_IMAGE := $(CONTAINER_REGISTRY)/alikov/automated
+
 .PHONY: install build clean test release-start release-finish uninstall release sdist rpm deb
 
 all: build
@@ -112,3 +115,6 @@ $(DEB_PACKAGE): control $(SDIST_TARBALL)
 	rm -rf -- "$$target"
 
 deb: $(DEB_PACKAGE)
+
+container-image:
+	docker build -t $(CONTAINER_IMAGE):$(VERSION) .
