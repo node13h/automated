@@ -389,7 +389,7 @@ interactive_answer () {
     {
         printf '%s: ' "${message[*]}"
         "${AUTOMATED_ANSWER_READ_COMMAND[@]}" answer
-        newline
+        printf '\n'
 
     } </dev/tty >/dev/tty
 
