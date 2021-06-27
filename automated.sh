@@ -379,7 +379,7 @@ handler_command () {
         handler+=(bash)
     fi
 
-    log_debug "Executing via $(quoted "${handler[*]}")" BRIGHT_BLUE
+    log_debug "Executing via $(quoted "${handler[@]}")" BRIGHT_BLUE
     "${handler[@]}"
 }
 
