@@ -349,7 +349,7 @@ handler_command () {
 
     local -a command_environment=()
 
-    local packaged_pty_helper_script wrapper_command
+    local packaged_pty_helper_script pty_helper_command
 
     if is_true "${DUMP_SCRIPT}"; then
         handler=(cat)
@@ -367,16 +367,20 @@ handler_command () {
             done
 
             packaged_pty_helper_script=$(gzip <"${AUTOMATED_LIBDIR%/}/pty_helper.py" | base64_encode)
-            wrapper_command="\"\${PYTHON_INTERPRETER}\" <(\"\${PYTHON_INTERPRETER}\" -m base64 -d <<< ${packaged_pty_helper_script} | gunzip)"
-
-            handler+=("PYTHON_INTERPRETER=\$(command -v python3 || command -v python2) && ${command_environment[*]} ${wrapper_command}")
+            # shellcheck disable=SC2016
+            pty_helper_command=('"${PYTHON_INTERPRETER}"' "<(\"\${PYTHON_INTERPRETER}\" -m base64 -d <<< ${packaged_pty_helper_script} | gunzip)")
 
             if ! is_true "${force_sudo_password}" && is_true "${SUDO_PASSWORDLESS}"; then
-                handler+=("--sudo-passwordless")
+                pty_helper_command+=("--sudo-passwordless")
             fi
-        fi
 
-        handler+=(bash)
+            pty_helper_command+=(bash)
+
+            handler+=("bash --norc -euc $(quoted "PYTHON_INTERPRETER=\$(command -v python3 || command -v python2) && ${command_environment[*]} exec ${pty_helper_command[*]}")")
+
+        else
+            handler+=(bash)
+        fi
     fi
 
     log_debug "Executing via $(quoted "${handler[@]}")" BRIGHT_BLUE
