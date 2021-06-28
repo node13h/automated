@@ -249,6 +249,7 @@ readable_directory () {
     [[ -d "${1}" && -r "${1}" ]]
 }
 
+# TODO: Replace with $OSTYPE?
 local_kernel () {
     uname -s
 }
