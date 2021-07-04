@@ -159,6 +159,22 @@ sudo make install
 
 ## Testing
 
+### Unit-tests
+
+Run `make test`.
+
+
+### End-to-end tests
+
+Prerequisites:
+- Podman
+
+First, run `make images` in the `e2e` directory to build SSHD target images and access keys locally. See `e2e/Makefile` for a list of image tags produced.
+Now you can run `make SSHD_TARGET_IMAGE=<image:tag> sshd-target app-container` to bring a container running SSHD and a container with `automated.sh` pre-installed up. Execute `make e2e-test` to run functional tests against he currently running SSHD target container.
+To bring containers down, run `make app-container-down sshd-target-down`.
+
+
+### Vagrant
 `vagrant up` will bring Fedora, CentOS, Ubuntu and FreeBSD VMs with the pre-installed automated.sh and the pre-configured user account `user`. The password for this user is `secret`. Every machine will allow passwordless SSH pubkey-based login and SUDO using this user account.
 
 Example:

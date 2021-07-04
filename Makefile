@@ -117,4 +117,44 @@ $(DEB_PACKAGE): control $(SDIST_TARBALL)
 deb: $(DEB_PACKAGE)
 
 container-image:
-	docker build -t $(CONTAINER_IMAGE):$(VERSION) .
+	podman build -t $(CONTAINER_IMAGE):$(VERSION) .
+
+DEPLOYMENT_ID := automated-dev
+
+STACK_MODE := local
+
+SSHD_TARGET_STATE_FILE := $(DEPLOYMENT_ID)-sshd-target.state
+SSHD_TARGET_SSH_PORT := 2222
+SSHD_TARGET_IMAGE := automated-test-sshd-centos7:1.0.0
+
+APP_CONTAINER_STATE_FILE := $(DEPLOYMENT_ID)-app.state
+
+# Explicitly specify whether to run automated using a container or directly.
+# We do not want any magic here to avoid it quietly falling back to whatever
+# automated.sh version currently installed in the operating system, when
+# user intended to use the containerized version, but forgot to build it.
+E2E_MODE_CONTAINER := 1
+
+TESTUSER_SUDO_PASSWORD = $(shell cat e2e/testuser_password)
+
+.PRECIOUS: $(SSHD_TARGET_STATE_FILE) $(APP_CONTAINER_STATE_FILE)
+
+$(SSHD_TARGET_STATE_FILE):
+	./scripts/$(STACK_MODE)-sshd-target.sh start $(SSHD_TARGET_STATE_FILE) $(DEPLOYMENT_ID) $(SSHD_TARGET_IMAGE) $(SSHD_TARGET_SSH_PORT) ./e2e/ssh
+
+sshd-target: $(SSHD_TARGET_STATE_FILE)
+sshd-target-down:
+	./scripts/$(STACK_MODE)-sshd-target.sh stop $(SSHD_TARGET_STATE_FILE)
+
+$(APP_CONTAINER_STATE_FILE):
+	./scripts/app-container.sh start $(APP_CONTAINER_STATE_FILE) $(DEPLOYMENT_ID) ./e2e
+
+app-container: $(APP_CONTAINER_STATE_FILE)
+app-container-down:
+	./scripts/app-container.sh stop $(APP_CONTAINER_STATE_FILE)
+
+e2e-test:
+	if [[ '$(E2E_MODE_CONTAINER)' -eq 1 ]]; then source $(APP_CONTAINER_STATE_FILE) && export APP_CONTAINER; fi \
+	  && source $(SSHD_TARGET_STATE_FILE) \
+	  && export SSHD_ADDRESS SSHD_PORT \
+	  && SUDO_PASSWORD=$(TESTUSER_SUDO_PASSWORD) ./e2e/functional.sh

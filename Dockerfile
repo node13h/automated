@@ -1,6 +1,6 @@
 FROM docker.io/fedora:34
 
-RUN dnf -y install make && dnf clean all && rm -rf /var/cache/yum
+RUN dnf -y install make openssh-clients expect && dnf clean all && rm -rf /var/cache/yum
 
 COPY . /dist
 
