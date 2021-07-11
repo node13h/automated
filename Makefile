@@ -136,10 +136,10 @@ e2e/ssh_host_%_key:
 
 e2e/ssh_host_%_key.pub: e2e/ssh_host_%_key
 
-e2e/id_rsa:
-	ssh-keygen -q -t rsa -f id_rsa -C '' -N ''
+e2e/id_%:
+	ssh-keygen -q -t $* -f $@ -C '' -N ''
 
-e2e/id_rsa.pub: e2e/id_rsa
+e2e/id_%.pub: e2e/id_%
 
 e2e/sshd_target_testuser_password:
 	openssl rand -hex 16 >./e2e/sshd_target_testuser_password
@@ -157,6 +157,8 @@ clean-sshd-keys:
 clean-app-env-keys:
 	rm -f e2e/app_env_testuser_password
 
+clean: clean-sshd-keys clean-app-env-keys
+
 .PRECIOUS: $(SSHD_TARGET_STATE_FILE) $(APP_CONTAINER_STATE_FILE)
 
 $(SSHD_TARGET_STATE_FILE): sshd-keys
@@ -167,7 +169,7 @@ sshd-target-down:
 	./e2e/$(STACK_MODE)-sshd-target.sh stop $(SSHD_TARGET_STATE_FILE)
 
 
-$(APP_ENV_STATE_FILE): app-env-keys
+$(APP_ENV_STATE_FILE): app-env-keys sshd-keys
 	./e2e/$(STACK_MODE)-app-env.sh start $(APP_ENV_STATE_FILE) $(DEPLOYMENT_ID) ./e2e
 
 app-env: $(APP_ENV_STATE_FILE)
