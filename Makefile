@@ -121,40 +121,61 @@ container-image:
 
 DEPLOYMENT_ID := automated-dev
 
-STACK_MODE := local
+STACK_MODE := container
 
 SSHD_TARGET_STATE_FILE := $(DEPLOYMENT_ID)-sshd-target.state
-SSHD_TARGET_SSH_PORT := 2222
-SSHD_TARGET_IMAGE := automated-test-sshd-centos7:1.0.0
+SSHD_TARGET_LOCAL_PORT := 2222
+SSHD_TARGET_OS := centos7
 
-APP_CONTAINER_STATE_FILE := $(DEPLOYMENT_ID)-app.state
+APP_ENV_STATE_FILE := $(DEPLOYMENT_ID)-app-env.state
 
-# Explicitly specify whether to run automated using a container or directly.
-# We do not want any magic here to avoid it quietly falling back to whatever
-# automated.sh version currently installed in the operating system, when
-# user intended to use the containerized version, but forgot to build it.
-E2E_MODE_CONTAINER := 1
+.PHONY: sshd-keys clean-sshd-keys
 
-TESTUSER_SUDO_PASSWORD = $(shell cat e2e/testuser_password)
+e2e/ssh_host_%_key:
+	ssh-keygen -q -t $* -f $@ -C '' -N ''
+
+e2e/ssh_host_%_key.pub: e2e/ssh_host_%_key
+
+e2e/id_rsa:
+	ssh-keygen -q -t rsa -f id_rsa -C '' -N ''
+
+e2e/id_rsa.pub: e2e/id_rsa
+
+e2e/sshd_target_testuser_password:
+	openssl rand -hex 16 >./e2e/sshd_target_testuser_password
+
+e2e/app_env_testuser_password:
+	openssl rand -hex 16 >./e2e/app_env_testuser_password
+
+sshd-keys: e2e/id_rsa e2e/ssh_host_ecdsa_key e2e/ssh_host_ed25519_key e2e/ssh_host_rsa_key ./e2e/sshd_target_testuser_password
+
+app-env-keys: e2e/app_env_testuser_password
+
+clean-sshd-keys:
+	rm -f e2e/id_rsa{,.pub} e2e/ssh_host_ecdsa_key{,.pub} e2e/ssh_host_ed25519_key{,.pub} e2e/ssh_host_rsa_key{,.pub} e2e/testuser_password
+
+clean-app-env-keys:
+	rm -f e2e/app_env_testuser_password
 
 .PRECIOUS: $(SSHD_TARGET_STATE_FILE) $(APP_CONTAINER_STATE_FILE)
 
-$(SSHD_TARGET_STATE_FILE):
-	./scripts/$(STACK_MODE)-sshd-target.sh start $(SSHD_TARGET_STATE_FILE) $(DEPLOYMENT_ID) $(SSHD_TARGET_IMAGE) $(SSHD_TARGET_SSH_PORT) ./e2e/ssh
+$(SSHD_TARGET_STATE_FILE): sshd-keys
+	./e2e/$(STACK_MODE)-sshd-target.sh start $(SSHD_TARGET_STATE_FILE) $(DEPLOYMENT_ID) $(SSHD_TARGET_OS) ./e2e $(SSHD_TARGET_LOCAL_PORT)
 
 sshd-target: $(SSHD_TARGET_STATE_FILE)
 sshd-target-down:
-	./scripts/$(STACK_MODE)-sshd-target.sh stop $(SSHD_TARGET_STATE_FILE)
+	./e2e/$(STACK_MODE)-sshd-target.sh stop $(SSHD_TARGET_STATE_FILE)
 
-$(APP_CONTAINER_STATE_FILE):
-	./scripts/app-container.sh start $(APP_CONTAINER_STATE_FILE) $(DEPLOYMENT_ID) ./e2e
 
-app-container: $(APP_CONTAINER_STATE_FILE)
-app-container-down:
-	./scripts/app-container.sh stop $(APP_CONTAINER_STATE_FILE)
+$(APP_ENV_STATE_FILE): app-env-keys
+	./e2e/$(STACK_MODE)-app-env.sh start $(APP_ENV_STATE_FILE) $(DEPLOYMENT_ID) ./e2e
+
+app-env: $(APP_ENV_STATE_FILE)
+app-env-down:
+	./e2e/$(STACK_MODE)-app-env.sh stop $(APP_ENV_STATE_FILE)
 
 e2e-test:
-	if [[ '$(E2E_MODE_CONTAINER)' -eq 1 ]]; then source $(APP_CONTAINER_STATE_FILE) && export APP_CONTAINER; fi \
+	set -a \
+	  && source $(APP_ENV_STATE_FILE) \
 	  && source $(SSHD_TARGET_STATE_FILE) \
-	  && export SSHD_ADDRESS SSHD_PORT \
-	  && SUDO_PASSWORD=$(TESTUSER_SUDO_PASSWORD) ./e2e/functional.sh
+	  && ./e2e/functional.sh
