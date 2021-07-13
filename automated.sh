@@ -322,7 +322,12 @@ EOF
         cat <<EOF
 {
     ${command}
+
     log_debug 'done'
+
+    if is_true "${AUTOMATED_DEBUG}"; then
+      trap - DEBUG
+    fi
 
     # exit() is required so we don't try to execute the STDIN in case
     # no one has consumed it.
@@ -336,7 +341,12 @@ EOF
         cat <<EOF
 {
     ${command}
+
     log_debug 'done'
+
+    if is_true "${AUTOMATED_DEBUG}"; then
+      trap - DEBUG
+    fi
 }
 EOF
     fi
