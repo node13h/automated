@@ -721,6 +721,15 @@ semver_matches_one_of () {
     return 1
 }
 
+bash_minor_version_is_higher_than () {
+    local major="${1}"
+    local minor="${2}"
+
+    ! [[ "${BASH_VERSION[0]}" -lt "${major}" ]] || return 1
+
+    ! [[ "${BASH_VERSINFO[0]}" -eq "${major}" && "${BASH_VERSINFO[1]}" -lt "${minor}" ]] || return 1
+}
+
 supported_automated_versions () {
     if ! semver_matches_one_of "${AUTOMATED_VERSION}" "$@"; then
         throw "Unsupported version ${AUTOMATED_VERSION} of Automated detected. Supported versions are: $(joined ', ' "${@}")"
