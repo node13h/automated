@@ -172,7 +172,19 @@ log_cmd_trap () {
 
     [[ "${current_command_type}" =~ file|function ]] || return 0
 
-    printf 'CMD %s(): %s\n' "${parent_function}" "$BASH_COMMAND" | head -n 1 | colorized GREEN >&2
+    # This intermediate variable exists solely for Bash 4.2 compatibility.
+    # A bug in this Bash version would cause all process substitution FIFOs
+    # to be invalidated when pipeline is executed.
+    #
+    # Pipeline wrapped in a command substitution does not seem
+    # to trigger the bug, however.
+    #
+    # This does not solve the problem in general, we just ensure this
+    # debug trap handler does not contribute to it.
+    local msg
+    msg=$(printf 'CMD %s(): %s\n' "${parent_function}" "$BASH_COMMAND" | head -n 1 | colorized GREEN)
+
+    printf '%s\n' "$msg"  >&2
 }
 
 throw () {
