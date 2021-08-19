@@ -766,3 +766,18 @@ EOF
                      '__automated_environment'
     sourced_drop '__automated_environment'
 }
+
+
+deprecated_with () {
+    log_debug "${FUNCNAME[1]}() is DEPRECATED. Use ${1}() instead."
+
+    "$@"
+}
+
+deprecated_with_alternatives () {
+    log_debug "${FUNCNAME[1]}() is DEPRECATED. Alternatives ${*}"
+}
+
+deprecated_function () {
+    log_debug "${FUNCNAME[1]}() is DEPRECATED."
+}
