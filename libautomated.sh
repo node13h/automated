@@ -134,6 +134,12 @@ log_info () {
     printf '%s\n' "$msg" | colorized WHITE >&2
 }
 
+log_error () {
+    local msg="${1}"
+
+    printf 'ERROR %s\n' "$msg" | colorized RED >&2
+}
+
 log_debug () {
     local msg="${1}"
     local fg_colour="${2:-YELLOW}"
