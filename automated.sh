@@ -641,6 +641,11 @@ parse_args () {
                 exit_after 0 printf '%s\n' "${AUTOMATED_VERSION}"
                 ;;
 
+            --)
+                shift
+                TARGETS+=("${@}")
+                break
+                ;;
             *)
                 TARGETS+=("${1}")
                 ;;

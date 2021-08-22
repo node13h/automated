@@ -317,6 +317,21 @@ Hello World
 EOF
 )
 
+test_remote_option_terminator () (
+
+    a_test_ssh_command () {
+        printf '%s\n' "$*"
+    }
+
+    export -f a_test_ssh_command
+
+    # shellcheck disable=SC2016
+    assert_stdout 'runcmd automated.sh --ssh-command a_test_ssh_command -- --help target2' <<"EOF"
+-q --help -- bash
+-q target2 -- bash
+EOF
+)
+
 test_remote_load_file () {
     runcmd mkdir -p "${TEMP_DIR}/mylib"
 
