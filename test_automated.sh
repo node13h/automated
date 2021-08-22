@@ -121,14 +121,13 @@ EOF
 test_file_as_function_pipe () {
     declare owner mode
 
-    {
-        owner=$(stat -c '%U:%G' '/dev/fd/0')
-        mode=$(stat -c '%#03a' '/dev/fd/0')
+    owner=$(stat -c '%U:%G' '/dev/fd/0')
+    mode=$(stat -c '%#03a' '/dev/fd/0')
 
-        assert_stdout "file_as_function /dev/fd/0 my-file-id" <(cat <<EOF
+    assert_stdout "file_as_function /dev/fd/0 my-file-id <<<'Hello World'" <(cat <<EOF
 drop_85f3735d27bcffbd74d4d5b092e52da0_body () {
     base64_decode <<"EOF-85f3735d27bcffbd74d4d5b092e52da0" | gzip -d
-H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
+H4sIAAAAAAAAA/NIzcnJVwjPL8pJ4QIA4+WVsAwAAAA=
 EOF-85f3735d27bcffbd74d4d5b092e52da0
 }
 
@@ -142,10 +141,7 @@ drop_85f3735d27bcffbd74d4d5b092e52da0_owner () {
 log_debug shipped\ /dev/fd/0\ as\ the\ file\ id\ my-file-id
 EOF
 )
-    } <<EOF
-Hello
-World
-EOF
+
 }
 
 test_file_as_function_dir_fail () {
@@ -281,23 +277,18 @@ EOF
 test_file_as_code_pipe () {
     declare mode
 
-    {
-        mode=$(stat -c '%#03a' '/dev/fd/0')
+    mode=$(stat -c '%#03a' '/dev/fd/0')
 
-        assert_stdout "file_as_code /dev/fd/0 /tmp/dst" <(cat <<EOF
+    assert_stdout "file_as_code /dev/fd/0 /tmp/dst <<<'Hello World'" <(cat <<EOF
 touch /tmp/dst
 chmod 0600 /tmp/dst
 base64_decode <<"EOF-d075c6918aed70a32aaebbd10eb9ecab" | gzip -d >/tmp/dst
-H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
+H4sIAAAAAAAAA/NIzcnJVwjPL8pJ4QIA4+WVsAwAAAA=
 EOF-d075c6918aed70a32aaebbd10eb9ecab
 chmod ${mode} /tmp/dst
 log_debug copied\ /dev/fd/0\ to\ /tmp/dst\ on\ the\ target
 EOF
 )
-    } <<EOF
-Hello
-World
-EOF
 }
 
 test_file_as_code_dir_fail () {
