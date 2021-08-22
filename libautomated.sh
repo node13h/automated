@@ -24,16 +24,22 @@
 
 set -euo pipefail
 
-AUTOMATED_DEBUG=FALSE
-AUTOMATED_DISABLE_COLOUR=FALSE
+AUTOMATED_DEBUG="${AUTOMATED_DEBUG:-FALSE}"
+
+# https://no-color.org/
+if [[ -n "${NO_COLOR:-}" ]]; then
+    AUTOMATED_DISABLE_COLOUR="${AUTOMATED_DISABLE_COLOUR:-TRUE}"
+else
+    AUTOMATED_DISABLE_COLOUR="${AUTOMATED_DISABLE_COLOUR:-FALSE}"
+fi
 
 AUTOMATED_EXIT_RUNNING_IN_TMUX=68
 AUTOMATED_EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX=69
 
 declare -a AUTOMATED_SUPPORTED_MULTIPLEXERS=(tmux)
 
-AUTOMATED_TMUX_SOCK_PREFIX='/tmp/tmux-automated'
-AUTOMATED_TMUX_FIFO_PREFIX='/tmp/tmux-fifo'
+AUTOMATED_TMUX_SOCK_PREFIX="${AUTOMATED_TMUX_SOCK_PREFIX:-/tmp/tmux-automated}"
+AUTOMATED_TMUX_FIFO_PREFIX="${AUTOMATED_TMUX_FIFO_PREFIX:-/tmp/tmux-fifo}"
 
 declare -a AUTOMATED_ANSWER_READ_COMMAND=('read' '-r')
 
@@ -194,6 +200,8 @@ throw () {
     exit 1
 }
 
+
+# TODO: Eval callback
 to_file () {
     local target_path="${1}"
     local callback="${2:-}"
