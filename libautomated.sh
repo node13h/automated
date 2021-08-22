@@ -539,7 +539,7 @@ EOF
 
 file_as_function () {
     local src="${1}"
-    local file_id="${2:-"${src}"}"
+    local file_id="${2:-${src}}"
     local mode owner file_id_hash
 
     if [[ -d "${src}" ]]; then
