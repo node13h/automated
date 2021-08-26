@@ -200,8 +200,6 @@ throw () {
     exit 1
 }
 
-
-# TODO: Eval callback
 to_file () {
     local target_path="${1}"
     local callback="${2:-}"
@@ -226,7 +224,7 @@ to_file () {
     mtime_after=$(file_mtime "${target_path}")
 
     if [[ -n "${callback}" ]] && [[ "${mtime_before}" -ne "${mtime_after}" ]]; then
-        "${callback}" "${target_path}"
+        eval "${callback}"
     fi
 
     eval "${restore_pipefail}"

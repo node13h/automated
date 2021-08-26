@@ -521,13 +521,13 @@ test_to_file_callback () {
         set -e
 
         callback_fn () {
-            echo 'Callback!'
+            printf 'Callback %s!\n' "$1"
         }
 
         temp_dir_quoted=$(printf '%q' "$temp_dir")
 
-        assert_stdout "echo 'Hello World' | to_file ${temp_dir_quoted%/}/test.txt callback_fn" - <<"EOF"
-Callback!
+        assert_stdout "echo 'Hello World' | to_file ${temp_dir_quoted%/}/test.txt 'callback_fn \"with arguments\"'" - <<"EOF"
+Callback with arguments!
 EOF
         assert_stdout "cat ${temp_dir_quoted%/}/test.txt" - <<< 'Hello World'
     )
