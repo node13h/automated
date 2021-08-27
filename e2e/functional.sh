@@ -152,7 +152,7 @@ test_local_exported_function () (
     export -f a_test_function
 
     # shellcheck disable=SC2016
-    assert_stdout 'runcmd automated.sh -e a_test_function -c a_test_function --local' <<"EOF"
+    assert_stdout 'runcmd automated.sh --export-fn a_test_function -c a_test_function --local' <<"EOF"
 Hello World
 EOF
 )
@@ -165,6 +165,15 @@ test_local_exported_variable () (
     # shellcheck disable=SC2016
     assert_stdout 'runcmd automated.sh -e a_test_variable -c "echo \$a_test_variable" --local' <<"EOF"
 Foo
+EOF
+)
+
+test_local_exported_variable_with_a_value () (
+
+    # shellcheck disable=SC2016
+    assert_stdout 'runcmd automated.sh -e MYVAR=multiline$'"'\n'"'value -c "echo \"\$MYVAR\"" --local' <<"EOF"
+multiline
+value
 EOF
 )
 
@@ -390,7 +399,7 @@ test_remote_exported_function () (
     export -f a_test_function
 
     # shellcheck disable=SC2016
-    assert_stdout 'runcmd automated.sh -e a_test_function -c a_test_function "${SSHD_ADDRESS}:${SSHD_PORT}"' <<"EOF"
+    assert_stdout 'runcmd automated.sh --export-fn a_test_function -c a_test_function "${SSHD_ADDRESS}:${SSHD_PORT}"' <<"EOF"
 Hello World
 EOF
 )
@@ -403,6 +412,15 @@ test_remote_exported_variable () (
     # shellcheck disable=SC2016
     assert_stdout 'runcmd automated.sh -e a_test_variable -c "echo \$a_test_variable" "${SSHD_ADDRESS}:${SSHD_PORT}"' <<"EOF"
 Foo
+EOF
+)
+
+test_remote_exported_variable_with_a_value () (
+
+    # shellcheck disable=SC2016
+    assert_stdout 'runcmd automated.sh -e MYVAR=multiline$'"'\n'"'value -c "echo \"\$MYVAR\"" "${SSHD_ADDRESS}:${SSHD_PORT}"' <<"EOF"
+multiline
+value
 EOF
 )
 

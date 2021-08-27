@@ -127,11 +127,14 @@ OPTIONS:
                               Default: ${AUTOMATED_CALL_CMD}
                               Env: AUTOMATED_CALL_CMD
   -i, --inventory FILE        Load list of targets from the FILE
-  -e, --export NAME           Make NAME from local environment available on the
-                              remote side. NAME can be either variable or
-                              function name. Functions have to be exported with
-                              the 'export -f NAME' first (bash-specific).
-                              May be specified multiple times
+  -e, --export VARIABLE[=VALUE]
+                              Make VARIABLE from the local environment available
+                              on the remote side.
+                              May be specified multiple times.
+  --export-fn FUNCTION        Make FUNCTION from the local environment available
+                              on the remote side. Functions have to be exported
+                              with 'export -f FUNCTION' first (bash-specific).
+                              May be specified multiple times.
   -l, --load PATH             Load file at specified PATH before calling
                               the command; in case PATH is a directory -
                               load *.sh from it. Can be specified multiple times.
@@ -242,7 +245,20 @@ EOF
 
     if [[ "${#EXPORT_VARS[@]}" -gt 0 ]]; then
         for var in "${EXPORT_VARS[@]}"; do
-            declared_var "${var}"
+            (
+                set -e
+
+                if [[ "${var}" == *=* ]]; then
+                    declare key value
+
+                    key="${var%%=*}"
+                    value="${var#*=}"
+
+                    declared_var "${key}" "${value}"
+                else
+                    declared_var "${var}"
+                fi
+            )
         done
     fi
 
@@ -613,12 +629,13 @@ parse_args () {
                 ;;
 
             -e|--export)
-                # NAME can be both function and variable at the same time
+                EXPORT_VARS+=("${2}")
+                shift
+                ;;
+
+            --export-fn)
                 if [[ "$(type -t "${2}")" = 'function' ]]; then
                     EXPORT_FUNCTIONS+=("${2}")
-                fi
-                if [[ "${!2+x}" = 'x' ]]; then
-                    EXPORT_VARS+=("${2}")
                 fi
                 shift
                 ;;

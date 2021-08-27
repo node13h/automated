@@ -600,6 +600,13 @@ declared_var () {
             declare "${var}=${2}"
         fi
 
+        if [[ -z "${!var+defined}" ]]; then
+            cat <<EOF
+throw $(quoted "Variable ${var} is not set")
+EOF
+            return 1
+        fi
+
         declare -p "${var}"
     )
 
