@@ -510,17 +510,7 @@ file_as_code () {
     local mode boundary
 
     if [[ -d "${src}" ]]; then
-        cat <<EOF
-throw $(quoted "${src} is a directory. directories are not supported")
-EOF
-        return 1
-    fi
-
-    if ! [[ -r "${src}" ]]; then
-        cat <<EOF
-throw $(quoted "${src} was not readable at the moment of the shipping attempt")
-EOF
-        return 1
+        throw "${src} is a directory. directories are not supported"
     fi
 
     mode=$(file_mode "${src}")
@@ -549,17 +539,7 @@ file_as_function () {
     local mode owner file_id_hash
 
     if [[ -d "${src}" ]]; then
-        cat <<EOF
-throw $(quoted "${src} is a directory. directories are not supported")
-EOF
-        return 1
-    fi
-
-    if ! [[ -r "${src}" ]]; then
-        cat <<EOF
-throw $(quoted "${src} was not readable at the moment of the shipping attempt")
-EOF
-        return 1
+        throw "${src} is a directory. directories are not supported"
     fi
 
     file_id_hash=$(md5 <<< "${file_id}")
@@ -598,13 +578,6 @@ declared_var () {
         if [[ -n "${2+defined}" ]]; then
             unset "${var}"
             declare "${var}=${2}"
-        fi
-
-        if [[ -z "${!var+defined}" ]]; then
-            cat <<EOF
-throw $(quoted "Variable ${var} is not set")
-EOF
-            return 1
         fi
 
         declare -p "${var}"
@@ -775,8 +748,16 @@ EOF
     declared_function 'is_function'
     declared_function 'throw'
 
-    file_as_function <(automated_environment_script "${target}") \
-                     '__automated_environment'
+    # coproc is necessary to catch an error exit code from the process
+    # substitution
+    declare cpid
+    coproc automated_environment_script "${target}"
+    cpid="${COPROC_PID}"
+
+    file_as_function <(cat <&"${COPROC[0]}") '__automated_environment'
+
+    # wait will return the exit code of the coproc
+    wait "$cpid"
     sourced_drop '__automated_environment'
 }
 

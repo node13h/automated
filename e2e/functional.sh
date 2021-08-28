@@ -94,40 +94,60 @@ Foo
 EOF
 }
 
+test_local_macro_fail () {
+    # shellcheck disable=SC2016
+    assert_fail 'runcmd automated.sh -m "bash -c \"exit 5\"" -c "true" --local' 5
+}
+
 test_local_load_file () {
     runcmd mkdir -p "${TEMP_DIR}/mylib"
 
-    runcmd tee "${TEMP_DIR}/mylib/functions.sh" <<"EOF" >/dev/null
+    set +e
+    (
+        set -e
+        runcmd tee "${TEMP_DIR}/mylib/functions.sh" <<"EOF" >/dev/null
 do_stuff () {
   echo "Hello World"
 }
 EOF
 
-    # shellcheck disable=SC2016
-    assert_stdout 'runcmd automated.sh -l "${TEMP_DIR}/mylib/functions.sh" -c do_stuff --local' <<"EOF"
+        # shellcheck disable=SC2016
+        assert_stdout 'runcmd automated.sh -l "${TEMP_DIR}/mylib/functions.sh" -c do_stuff --local' <<"EOF"
 Hello World
 EOF
+    )
+    declare rc="$?"
+    set -e
 
-runcmd rm -rf -- "${TEMP_DIR}/mylib"
+    runcmd rm -rf -- "${TEMP_DIR}/mylib"
 
+    return "$rc"
+}
+
+test_local_load_fail () {
+    # shellcheck disable=SC2016
+    assert_fail 'runcmd automated.sh -l "/DOES/NOT/EXIST" -c true --local 2>/dev/null'
 }
 
 test_local_load_dir () {
     runcmd mkdir -p "${TEMP_DIR}/mylib"
 
-    runcmd tee "${TEMP_DIR}/mylib/functions1.sh" <<"EOF" >/dev/null
+    set +e
+    (
+        set -e
+        runcmd tee "${TEMP_DIR}/mylib/functions1.sh" <<"EOF" >/dev/null
 do_stuff () {
   do_the_other_stuff
 }
 EOF
 
-    runcmd tee "${TEMP_DIR}/mylib/functions2.sh" <<"EOF" >/dev/null
+        runcmd tee "${TEMP_DIR}/mylib/functions2.sh" <<"EOF" >/dev/null
 do_the_other_stuff () {
   echo "Hello World"
 }
 EOF
 
-    runcmd tee "${TEMP_DIR}/mylib/somefile" <<"EOF" >/dev/null
+        runcmd tee "${TEMP_DIR}/mylib/somefile" <<"EOF" >/dev/null
 # This file does not have the .sh extension
 # therefore should be ignored
 # and commands like
@@ -135,12 +155,17 @@ exit 99
 # should have no effect
 EOF
 
-    # shellcheck disable=SC2016
-    assert_stdout 'runcmd automated.sh -l "${TEMP_DIR}/mylib" -c do_stuff --local' <<"EOF"
+        # shellcheck disable=SC2016
+        assert_stdout 'runcmd automated.sh -l "${TEMP_DIR}/mylib" -c do_stuff --local' <<"EOF"
 Hello World
 EOF
+    )
+    declare rc="$?"
+    set -e
 
     runcmd rm -rf -- "${TEMP_DIR}/mylib"
+
+    return "$rc"
 }
 
 test_local_exported_function () (
@@ -166,6 +191,10 @@ test_local_exported_variable () (
     assert_stdout 'runcmd automated.sh -e a_test_variable -c "echo \$a_test_variable" --local' <<"EOF"
 Foo
 EOF
+)
+
+test_local_exported_variable_fail () (
+    assert_fail 'runcmd automated.sh -e UNDEFINED_VARIABLE -c true --local 2>/dev/null'
 )
 
 test_local_exported_variable_with_a_value () (
@@ -263,6 +292,80 @@ Hello World
 EOF
 }
 
+test_local_drag () {
+    runcmd mkdir -p "${TEMP_DIR}/drag"
+
+    set +e
+    (
+        set -e
+        runcmd tee "${TEMP_DIR}/drag/source" >/dev/null <<< 'Hello World'
+
+        declare target_quoted
+        # shellcheck disable=SC2034
+        target_quoted=$(printf '%q' "${TEMP_DIR}/drag/target")
+
+        # shellcheck disable=SC2016
+        assert_stdout 'runcmd automated.sh --drag "${TEMP_DIR}/drag/source" my-file-id -c "drop my-file-id ${target_quoted}; cat ${target_quoted}" --local' <<"EOF"
+Hello World
+EOF
+    )
+    declare rc="$?"
+    set -e
+
+    runcmd rm -rf -- "${TEMP_DIR}/drag"
+
+    return "$rc"
+}
+
+test_local_drag_fail () {
+    # shellcheck disable=SC2016
+    assert_fail 'runcmd automated.sh --drag /DOES/NOT/EXIST myid -c true --local 2>/dev/null'
+}
+
+test_local_copy () {
+    runcmd mkdir -p "${TEMP_DIR}/copy"
+
+    set +e
+    (
+        set -e
+        runcmd tee "${TEMP_DIR}/copy/source" >/dev/null <<< 'Hello World'
+
+        declare target_quoted
+        # shellcheck disable=SC2034
+        target_quoted=$(printf '%q' "${TEMP_DIR}/copy/target")
+
+        # shellcheck disable=SC2016
+        assert_stdout 'runcmd automated.sh --cp "${TEMP_DIR}/copy/source" "${TEMP_DIR}/copy/target" -c "cat ${target_quoted}" --local' <<"EOF"
+Hello World
+EOF
+    )
+    declare rc="$?"
+    set -e
+
+    runcmd rm -rf -- "${TEMP_DIR}/copy"
+
+    return "$rc"
+}
+
+test_local_copy_fail () {
+    runcmd mkdir -p "${TEMP_DIR}/copy"
+
+    set +e
+    (
+        set -e
+
+        # shellcheck disable=SC2016
+        assert_fail 'runcmd automated.sh --cp /DOES/NOT/EXIST "${TEMP_DIR}/copy/target" -c true --local 2>/dev/null'
+
+    )
+    declare rc="$?"
+    set -e
+
+    runcmd rm -rf -- "${TEMP_DIR}/copy"
+
+    return "$rc"
+}
+
 test_remote_command () {
     # shellcheck disable=SC2016
     assert_stdout 'runcmd automated.sh -c "echo Hello   World" "${SSHD_ADDRESS}:${SSHD_PORT}"' <<"EOF"
@@ -344,37 +447,49 @@ EOF
 test_remote_load_file () {
     runcmd mkdir -p "${TEMP_DIR}/mylib"
 
-    runcmd tee "${TEMP_DIR}/mylib/functions.sh" <<"EOF" >/dev/null
+    set +e
+    (
+        set -e
+
+        runcmd tee "${TEMP_DIR}/mylib/functions.sh" <<"EOF" >/dev/null
 do_stuff () {
   echo "Hello World"
 }
 EOF
 
-    # shellcheck disable=SC2016
-    assert_stdout 'runcmd automated.sh -l "${TEMP_DIR}/mylib/functions.sh" -c do_stuff "${SSHD_ADDRESS}:${SSHD_PORT}"' <<"EOF"
+        # shellcheck disable=SC2016
+        assert_stdout 'runcmd automated.sh -l "${TEMP_DIR}/mylib/functions.sh" -c do_stuff "${SSHD_ADDRESS}:${SSHD_PORT}"' <<"EOF"
 Hello World
 EOF
+    )
+    declare rc="$?"
+    set -e
 
-runcmd rm -rf -- "${TEMP_DIR}/mylib"
+    runcmd rm -rf -- "${TEMP_DIR}/mylib"
 
+    return "$rc"
 }
 
 test_remote_load_dir () {
     runcmd mkdir -p "${TEMP_DIR}/mylib"
 
-    runcmd tee "${TEMP_DIR}/mylib/functions1.sh" <<"EOF" >/dev/null
+    set +e
+    (
+        set -e
+
+        runcmd tee "${TEMP_DIR}/mylib/functions1.sh" <<"EOF" >/dev/null
 do_stuff () {
   do_the_other_stuff
 }
 EOF
 
-    runcmd tee "${TEMP_DIR}/mylib/functions2.sh" <<"EOF" >/dev/null
+        runcmd tee "${TEMP_DIR}/mylib/functions2.sh" <<"EOF" >/dev/null
 do_the_other_stuff () {
   echo "Hello World"
 }
 EOF
 
-    runcmd tee "${TEMP_DIR}/mylib/somefile" <<"EOF" >/dev/null
+        runcmd tee "${TEMP_DIR}/mylib/somefile" <<"EOF" >/dev/null
 # This file does not have the .sh extension
 # therefore should be ignored
 # and commands like
@@ -382,12 +497,17 @@ exit 99
 # should have no effect
 EOF
 
-    # shellcheck disable=SC2016
-    assert_stdout 'runcmd automated.sh -l "${TEMP_DIR}/mylib" -c do_stuff "${SSHD_ADDRESS}:${SSHD_PORT}"' <<"EOF"
+        # shellcheck disable=SC2016
+        assert_stdout 'runcmd automated.sh -l "${TEMP_DIR}/mylib" -c do_stuff "${SSHD_ADDRESS}:${SSHD_PORT}"' <<"EOF"
 Hello World
 EOF
+    )
+    declare rc="$?"
+    set -e
 
     runcmd rm -rf -- "${TEMP_DIR}/mylib"
+
+    return "$rc"
 }
 
 test_remote_exported_function () (

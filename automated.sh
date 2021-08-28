@@ -467,7 +467,18 @@ execute () {
         set +e
         (
             set -e
-            handler_command "${force_sudo_password}" > >("${output_processor[@]}") 2> >("${output_processor[@]}" >&2) < <(rendered_script "${target}" "${command}")
+
+            # coproc is necessary to catch an error exit code from the process
+            # substitution. The RENDERED_SCRIPT_STDIN FD is used to connect main
+            # process STDIN to coproc STDIN to enable the --stdin feature.
+            declare cpid
+            { coproc rendered_script "${target}" "${command}" <&"${RENDERED_SCRIPT_STDIN}"; } {RENDERED_SCRIPT_STDIN}<&0
+
+            cpid="${COPROC_PID}"
+
+            handler_command "${force_sudo_password}" > >("${output_processor[@]}") 2> >("${output_processor[@]}" >&2) < <(cat <&"${COPROC[0]}")
+
+            wait "$cpid"
         )
         rc="$?"
         set -e
@@ -670,30 +681,6 @@ parse_args () {
 
         shift
 
-    done
-
-    # Validate
-
-    for path in "${LOAD_PATHS[@]}"; do
-        [[ -r "${path}" ]] || throw "Load path ${path} is not readable"
-    done
-
-    for line in "${COPY_PAIRS[@]}"; do
-        # shellcheck disable=SC2206
-        pair=(${line})
-        path="${pair[0]}"
-
-        [[ -r "${path}" ]] || throw "Copy path ${path} is not readable"
-        ! [[ -d "${path}" ]] || throw "Copy path ${path} is a directory"
-    done
-
-    for line in "${DRAG_PAIRS[@]}"; do
-        # shellcheck disable=SC2206
-        pair=(${line})
-        path="${pair[0]}"
-
-        [[ -r "${path}" ]] || throw "Drag path ${path} is not readable"
-        ! [[ -d "${path}" ]] || throw "Copy path ${path} is a directory"
     done
 }
 

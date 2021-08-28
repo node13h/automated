@@ -152,12 +152,8 @@ test_file_as_function_dir_fail () {
     (
         set -e
 
-        temp_dir_quoted=$(printf '%q' "$temp_dir")
-
-        assert_fail "file_as_function ${temp_dir_quoted} my-file-id >/dev/null"
-        assert_stdout "file_as_function ${temp_dir_quoted} my-file-id" - <<EOF
-throw ${temp_dir_quoted}\ is\ a\ directory.\ directories\ are\ not\ supported
-EOF
+        # shellcheck disable=SC2016
+        assert_fail 'file_as_function "${temp_dir}" my-file-id 2>/dev/null'
     )
     rc="$?"
     set -e
@@ -168,10 +164,7 @@ EOF
 }
 
 test_file_as_function_unreadable () {
-    assert_fail "file_as_function /non/existing/file my-file-id >/dev/null"
-        assert_stdout "file_as_function /non/existing/file my-file-id" - <<EOF
-throw /non/existing/file\ was\ not\ readable\ at\ the\ moment\ of\ the\ shipping\ attempt
-EOF
+    assert_fail "file_as_function /non/existing/file my-file-id 2>/dev/null"
 }
 
 test_drop_stdout () {
@@ -299,12 +292,8 @@ test_file_as_code_dir_fail () {
     (
         set -e
 
-        temp_dir_quoted=$(printf '%q' "$temp_dir")
-
-        assert_fail "file_as_code ${temp_dir_quoted} /tmp/dst >/dev/null"
-        assert_stdout "file_as_code ${temp_dir_quoted} /tmp/dst" - <<EOF
-throw ${temp_dir_quoted}\ is\ a\ directory.\ directories\ are\ not\ supported
-EOF
+        # shellcheck disable=SC2016
+        assert_fail 'file_as_code "${temp_dir}" /tmp/dst 2>/dev/null'
     )
     rc="$?"
     set -e
@@ -315,10 +304,7 @@ EOF
 }
 
 test_file_as_code_unreadable () {
-    assert_fail "file_as_code /non/existing/file /tmp/dst >/dev/null"
-    assert_stdout "file_as_code /non/existing/file /tmp/dst" - <<EOF
-throw /non/existing/file\ was\ not\ readable\ at\ the\ moment\ of\ the\ shipping\ attempt
-EOF
+    assert_fail "file_as_code /non/existing/file /tmp/dst 2>/dev/null"
 }
 
 test_is_function_true () {
