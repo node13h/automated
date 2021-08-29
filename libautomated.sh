@@ -522,13 +522,17 @@ file_as_code () {
         throw "${src} is a directory. directories are not supported"
     fi
 
-    mode=$(file_mode "${src}")
+    if ! [[ -e "${src}" ]]; then
+        throw "${src} does not exist"
+    fi
 
     boundary="EOF-$(md5 <<< "${dst}")"
 
+    if [[ -f "${src}" ]]; then
+        mode=$(file_mode "${src}")
+    fi
+
     cat <<EOF
-touch $(quoted "${dst}")
-chmod 0600 $(quoted "${dst}")
 base64_decode <<"${boundary}" | gzip -d >$(quoted "${dst}")
 EOF
 
@@ -536,7 +540,15 @@ EOF
 
     cat <<EOF
 ${boundary}
+EOF
+
+    if [[ -f "${src}" ]]; then
+        cat <<EOF
 chmod ${mode} $(quoted "${dst}")
+EOF
+    fi
+
+    cat <<EOF
 log_debug $(quoted "copied ${src} to ${dst} on the target")
 EOF
 }
@@ -545,16 +557,21 @@ EOF
 file_as_function () {
     local src="${1}"
     local file_id="${2:-${src}}"
-    local mode owner file_id_hash
+    local mode file_id_hash
 
     if [[ -d "${src}" ]]; then
         throw "${src} is a directory. directories are not supported"
     fi
 
+    if ! [[ -e "${src}" ]]; then
+        throw "${src} does not exist"
+    fi
+
     file_id_hash=$(md5 <<< "${file_id}")
 
-    mode=$(file_mode "${src}")
-    owner=$(file_owner "${src}")
+    if [[ -f "${src}" ]]; then
+        mode=$(file_mode "${src}")
+    fi
 
     cat <<EOF
 drop_${file_id_hash}_body () {
@@ -566,14 +583,14 @@ EOF
     cat <<EOF
 EOF-${file_id_hash}
 }
+EOF
+    if [[ -f "${src}" ]]; then
+        cat <<EOF
+AUTOMATED_DROP_${file_id_hash^^}_MODE=${mode}
+EOF
+    fi
 
-drop_${file_id_hash}_mode () {
-    printf '%s\n' '${mode}'
-}
-
-drop_${file_id_hash}_owner () {
-    printf '%s\n' '${owner}'
-}
+    cat <<EOF
 log_debug $(quoted "shipped ${src} as the file id ${file_id}")
 EOF
 }
@@ -606,23 +623,25 @@ drop () {
     local file_id="${1}"
     local dst="${2:-}"
 
-    local file_id_hash original_mode
+    local mode file_id_hash mode_var
 
     file_id_hash=$(md5 <<< "${file_id}")
 
     is_function "drop_${file_id_hash}_body" || throw "File id ${file_id} is not dragged"
 
     if [[ -n "${dst}" ]]; then
-        original_mode=$("drop_${file_id_hash}_mode")
-
-        local mode="${3:-${original_mode}}"
-
-        touch "${dst}"
-        chmod 0600 "${dst}"
+        mode_var="AUTOMATED_DROP_${file_id_hash^^}_MODE"
+        if [[ -n "${!mode_var:-}" ]]; then
+            mode="${3:-${!mode_var}}"
+        else
+            mode="${3:-}"
+        fi
 
         "drop_${file_id_hash}_body" "${file_id}" >"${dst}"
 
-        chmod "${mode}" "${dst}"
+        if [[ -n "${mode:-}" ]]; then
+            chmod "${mode}" "${dst}"
+        fi
     else
         "drop_${file_id_hash}_body" "${file_id}"
     fi

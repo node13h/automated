@@ -58,14 +58,7 @@ drop_85f3735d27bcffbd74d4d5b092e52da0_body () {
 H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
 EOF-85f3735d27bcffbd74d4d5b092e52da0
 }
-
-drop_85f3735d27bcffbd74d4d5b092e52da0_mode () {
-    printf '%s\n' '${mode}'
-}
-
-drop_85f3735d27bcffbd74d4d5b092e52da0_owner () {
-    printf '%s\n' '${owner}'
-}
+AUTOMATED_DROP_85F3735D27BCFFBD74D4D5B092E52DA0_MODE=0600
 log_debug shipped\ ${temp_file_quoted}\ as\ the\ file\ id\ my-file-id
 EOF
     )
@@ -99,14 +92,7 @@ drop_${name_md5}_body () {
 H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
 EOF-${name_md5}
 }
-
-drop_${name_md5}_mode () {
-    printf '%s\n' '${mode}'
-}
-
-drop_${name_md5}_owner () {
-    printf '%s\n' '${owner}'
-}
+AUTOMATED_DROP_${name_md5^^}_MODE=0600
 log_debug shipped\ ${temp_file_quoted}\ as\ the\ file\ id\ ${temp_file_quoted}
 EOF
     )
@@ -119,24 +105,15 @@ EOF
 }
 
 test_file_as_function_pipe () {
-    declare owner mode
+    declare owner
 
     owner=$(stat -c '%U:%G' '/dev/fd/0')
-    mode=$(stat -c '%#03a' '/dev/fd/0')
 
     assert_stdout "file_as_function /dev/fd/0 my-file-id <<<'Hello World'" <(cat <<EOF
 drop_85f3735d27bcffbd74d4d5b092e52da0_body () {
     base64_decode <<"EOF-85f3735d27bcffbd74d4d5b092e52da0" | gzip -d
 H4sIAAAAAAAAA/NIzcnJVwjPL8pJ4QIA4+WVsAwAAAA=
 EOF-85f3735d27bcffbd74d4d5b092e52da0
-}
-
-drop_85f3735d27bcffbd74d4d5b092e52da0_mode () {
-    printf '%s\n' '${mode}'
-}
-
-drop_85f3735d27bcffbd74d4d5b092e52da0_owner () {
-    printf '%s\n' '${owner}'
 }
 log_debug shipped\ /dev/fd/0\ as\ the\ file\ id\ my-file-id
 EOF
@@ -206,13 +183,8 @@ H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
 EOF-85f3735d27bcffbd74d4d5b092e52da0
         }
 
-        drop_85f3735d27bcffbd74d4d5b092e52da0_mode () {
-            printf '%s\n' '0750'
-        }
-
-        drop_85f3735d27bcffbd74d4d5b092e52da0_owner () {
-            printf '%s\n' 'root:root'
-        }
+        # shellcheck disable=SC2034
+        AUTOMATED_DROP_85F3735D27BCFFBD74D4D5B092E52DA0_MODE=750
 
         assert_success "drop my-file-id ${dst_quoted}"
         assert_stdout "cat ${dst_quoted}" <<"EOF"
@@ -250,8 +222,6 @@ EOF
         temp_file_quoted=$(printf '%q' "$temp_file")
 
         assert_stdout "file_as_code ${temp_file_quoted} /tmp/dst" - <<EOF
-touch /tmp/dst
-chmod 0600 /tmp/dst
 base64_decode <<"EOF-d075c6918aed70a32aaebbd10eb9ecab" | gzip -d >/tmp/dst
 H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
 EOF-d075c6918aed70a32aaebbd10eb9ecab
@@ -273,12 +243,9 @@ test_file_as_code_pipe () {
     mode=$(stat -c '%#03a' '/dev/fd/0')
 
     assert_stdout "file_as_code /dev/fd/0 /tmp/dst <<<'Hello World'" <(cat <<EOF
-touch /tmp/dst
-chmod 0600 /tmp/dst
 base64_decode <<"EOF-d075c6918aed70a32aaebbd10eb9ecab" | gzip -d >/tmp/dst
 H4sIAAAAAAAAA/NIzcnJVwjPL8pJ4QIA4+WVsAwAAAA=
 EOF-d075c6918aed70a32aaebbd10eb9ecab
-chmod ${mode} /tmp/dst
 log_debug copied\ /dev/fd/0\ to\ /tmp/dst\ on\ the\ target
 EOF
 )

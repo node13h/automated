@@ -293,26 +293,66 @@ EOF
 }
 
 test_local_drag () {
-    runcmd mkdir -p "${TEMP_DIR}/drag"
+    runcmd mkdir -p "${TEMP_DIR}/dr \"ag"
 
     set +e
     (
         set -e
-        runcmd tee "${TEMP_DIR}/drag/source" >/dev/null <<< 'Hello World'
+
+        declare source
+        source="${TEMP_DIR}/dr \"ag/source"
+
+        runcmd tee "${source}" >/dev/null <<< 'Hello World'
 
         declare target_quoted
+        target_quoted=$(printf '%q\n' "${TEMP_DIR}/dr \"ag/target")
+
+        declare automated_call
         # shellcheck disable=SC2034
-        target_quoted=$(printf '%q' "${TEMP_DIR}/drag/target")
+        automated_call="drop my-file-id ${target_quoted}; cat ${target_quoted}"
 
         # shellcheck disable=SC2016
-        assert_stdout 'runcmd automated.sh --drag "${TEMP_DIR}/drag/source" my-file-id -c "drop my-file-id ${target_quoted}; cat ${target_quoted}" --local' <<"EOF"
+        assert_stdout 'runcmd automated.sh --drag "${source}" my-file-id -c "${automated_call}" --local' <<"EOF"
 Hello World
 EOF
     )
     declare rc="$?"
     set -e
 
-    runcmd rm -rf -- "${TEMP_DIR}/drag"
+    runcmd rm -rf -- "${TEMP_DIR}/dr \"ag"
+
+    return "$rc"
+}
+
+test_local_drag_pipe () {
+    runcmd mkdir -p "${TEMP_DIR}/dr \"ag"
+
+    set +e
+    (
+        set -e
+
+        declare target_quoted
+        target_quoted=$(printf '%q\n' "${TEMP_DIR}/dr \"ag/target")
+
+        declare automated_call_quoted
+        automated_call_quoted=$(printf '%q\n' "drop my-file-id ${target_quoted}; cat ${target_quoted}")
+
+        declare automated_cmd
+        # shellcheck disable=SC2034
+        automated_cmd="automated.sh --drag <(echo \"Hello World\") my-file-id -c ${automated_call_quoted} --local"
+
+        # Wrapped in bash, since runcmd may not execute the command on the local
+        # machine, so the FD of the process substitution may not be available in
+        # the execution environment.
+        # shellcheck disable=SC2016
+        assert_stdout 'runcmd bash -c "${automated_cmd}"' <<"EOF"
+Hello World
+EOF
+    )
+    declare rc="$?"
+    set -e
+
+    runcmd rm -rf -- "${TEMP_DIR}/dr \"ag"
 
     return "$rc"
 }
@@ -323,26 +363,34 @@ test_local_drag_fail () {
 }
 
 test_local_copy () {
-    runcmd mkdir -p "${TEMP_DIR}/copy"
+    runcmd mkdir -p "${TEMP_DIR}/co \"py"
 
     set +e
     (
         set -e
-        runcmd tee "${TEMP_DIR}/copy/source" >/dev/null <<< 'Hello World'
 
-        declare target_quoted
+        declare source
+        source="${TEMP_DIR}/co \"py/source"
+
+        runcmd tee "${source}" >/dev/null <<< 'Hello World'
+
+        declare target target_quoted
+        target="${TEMP_DIR}/co \"py/target"
+        target_quoted=$(printf '%q' "${target}")
+
+        declare automated_call
         # shellcheck disable=SC2034
-        target_quoted=$(printf '%q' "${TEMP_DIR}/copy/target")
+        automated_call="cat ${target_quoted}"
 
         # shellcheck disable=SC2016
-        assert_stdout 'runcmd automated.sh --cp "${TEMP_DIR}/copy/source" "${TEMP_DIR}/copy/target" -c "cat ${target_quoted}" --local' <<"EOF"
+        assert_stdout 'runcmd automated.sh --cp "${source}" "${target}" -c "${automated_call}" --local' <<"EOF"
 Hello World
 EOF
     )
     declare rc="$?"
     set -e
 
-    runcmd rm -rf -- "${TEMP_DIR}/copy"
+    runcmd rm -rf -- "${TEMP_DIR}/co \"py"
 
     return "$rc"
 }

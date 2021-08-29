@@ -277,7 +277,7 @@ EOF
     if [[ "${#DRAG_PAIRS[@]}" -gt 0 ]]; then
         for pair in "${DRAG_PAIRS[@]}"; do
             # shellcheck disable=SC2086
-            file_as_function ${pair}
+            eval "file_as_function ${pair}"
         done
     fi
 
@@ -327,7 +327,7 @@ rendered_script () {
     if [[ "${#COPY_PAIRS[@]}" -gt 0 ]]; then
         for pair in "${COPY_PAIRS[@]}"; do
             # shellcheck disable=SC2086
-            file_as_code ${pair}
+            eval "file_as_code ${pair}"
         done
     fi
 
