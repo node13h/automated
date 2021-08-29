@@ -54,13 +54,13 @@ ssh_command () {
 
 # This command is usually run on the controlling workstation, not remote
 attach_to_multiplexer () {
-    local multiplexer="${1}"
-    local target="${2:-LOCAL HOST}"
+    declare multiplexer="${1}"
+    declare target="${2:-LOCAL HOST}"
 
-    local -a handler
-    local command
+    declare -a handler
+    declare command
 
-    local -a ssh_args
+    declare -a ssh_args
 
     if is_true "${AUTOMATED_EXECUTE_LOCALLY}"; then
         handler=(eval)
@@ -83,7 +83,7 @@ attach_to_multiplexer () {
 }
 
 ask_sudo_password () {
-    local sudo_password
+    declare sudo_password
 
     if is_true "${AUTOMATED_SUDO_PASSWORD_ON_STDIN}"; then
         read -r sudo_password
@@ -226,11 +226,11 @@ EOF
 
 automated_environment_script () {
     # shellcheck disable=SC2034
-    local AUTOMATED_CURRENT_TARGET="${1}"
+    declare AUTOMATED_CURRENT_TARGET="${1}"
 
-    local var fn pair macro path file_path
+    declare var fn pair macro path file_path
 
-    local -a paths=()
+    declare -a paths=()
 
     cat <<EOF
 #!/usr/bin/env bash
@@ -308,10 +308,10 @@ EOF
 }
 
 rendered_script () {
-    local target="${1}"
-    local command="${2}"
+    declare target="${1}"
+    declare command="${2}"
 
-    local pair
+    declare pair
 
     # sudo password has to go first!
     if is_true "${AUTOMATED_SUDO_ENABLE}"; then
@@ -377,12 +377,12 @@ EOF
 
 
 handler_command () {
-    local -a force_sudo_password="${1}"
-    local -a handler=()
+    declare force_sudo_password="${1}"
+    declare -a handler=()
 
-    local -a command_environment=()
+    declare -a command_environment=()
 
-    local packaged_pty_helper_script pty_helper_command
+    declare packaged_pty_helper_script pty_helper_command
 
     if is_true "${AUTOMATED_DUMP_SCRIPT}"; then
         handler=(cat)
@@ -422,14 +422,14 @@ handler_command () {
 
 
 execute () {
-    local command="${1}"
-    local target="${2:-LOCAL HOST}"
+    declare command="${1}"
+    declare target="${2:-LOCAL HOST}"
 
-    local sudo_password
-    local force_sudo_password=FALSE
+    declare sudo_password
+    declare force_sudo_password=FALSE
 
-    local handler rc do_attach multiplexer
-    local -a output_processor
+    declare handler rc do_attach multiplexer
+    declare -a output_processor
 
     # Loop until SUDO password is accepted
     while true; do
@@ -520,8 +520,8 @@ execute () {
 }
 
 parse_args () {
-    local list_file inventory_file path
-    local -a pair
+    declare list_file inventory_file path
+    declare -a pair
 
     while [[ "${#}" -gt 0 ]]; do
 
@@ -679,7 +679,7 @@ parse_args () {
 
 
 main () {
-    local rc target
+    declare rc target
 
     [[ "${#}" -gt 0 ]] || exit_after 1 usage >&2
 

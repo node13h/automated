@@ -52,9 +52,9 @@ printable_only () {
 }
 
 translated () {
-    local str="${1}"
+    declare str="${1}"
     shift
-    local a b
+    declare a b
 
     while [[ "${#}" -gt 1 ]]; do
         a="${1}"
@@ -68,16 +68,16 @@ translated () {
 }
 
 sed_replacement () {
-    local str="${1}"
+    declare str="${1}"
 
     # shellcheck disable=SC1003
     translated "${str}" '\' '\\' '/' '\/' '&' '\&' $'\n' '\n'
 }
 
 colorized () {
-    local fg_colour="${1}"
+    declare fg_colour="${1}"
 
-    local -A colour_mappings=(
+    declare -A colour_mappings=(
         [BLACK]=30
         [RED]=31
         [GREEN]=32
@@ -106,20 +106,20 @@ colorized () {
 }
 
 text_block () {
-    local name="${1}"
+    declare name="${1}"
 
     sed -e 1s/^/"$(sed_replacement "BEGIN ${name}")"\\n/ -e \$s/$/\\n"$(sed_replacement "END ${name}")"/
 }
 
 prefixed_lines () {
-    local prefix="${1}"
+    declare prefix="${1}"
 
     sed -e "s/^/$(sed_replacement "${prefix}")/"
 }
 
 # shellcheck disable=SC2120
 to_debug () {
-    local fg_colour="${1:-YELLOW}"
+    declare fg_colour="${1:-YELLOW}"
 
     if is_true "${AUTOMATED_DEBUG}"; then
         colorized "${fg_colour}" >&2
@@ -133,20 +133,20 @@ pipe_debug () {
 }
 
 log_info () {
-    local msg="${1}"
+    declare msg="${1}"
 
     printf '%s\n' "$msg" | colorized WHITE >&2
 }
 
 log_error () {
-    local msg="${1}"
+    declare msg="${1}"
 
     printf 'ERROR %s\n' "$msg" | colorized RED >&2
 }
 
 log_debug () {
-    local msg="${1}"
-    local fg_colour="${2:-YELLOW}"
+    declare msg="${1}"
+    declare fg_colour="${2:-YELLOW}"
 
     if is_true "${AUTOMATED_DEBUG}"; then
         printf 'DEBUG %s\n' "$msg" | colorized "${fg_colour}" >&2
@@ -154,7 +154,7 @@ log_debug () {
 }
 
 log_cmd_trap () {
-    local bash_command_firstline
+    declare bash_command_firstline
     bash_command_firstline=$(printf '%s\n' "$BASH_COMMAND" | head -n 1)
 
     # shellcheck disable=SC2086
@@ -162,29 +162,29 @@ log_cmd_trap () {
 
     [[ "${#}" -gt 0 ]] || return 0
 
-    local stack_depth="${#FUNCNAME[@]}"
+    declare stack_depth="${#FUNCNAME[@]}"
 
     [[ "${stack_depth}" -gt 0 ]] || return 0
 
     ! [[ "${stack_depth}" -gt $((AUTOMATED_FUNCTRACE_DEPTH+1)) ]] || return 0
 
-    local current_fn="${FUNCNAME[1]:-}"
+    declare current_fn="${FUNCNAME[1]:-}"
 
     # Only trace supported commands
-    local current_command="${1}"
+    declare current_command="${1}"
 
     # Filter out function entrypoints
     ! [[ "${current_fn}" == "${current_command}" ]] || return 0
 
-    local current_command_type
+    declare current_command_type
     current_command_type=$(type -t "${current_command}") || return 0
 
     [[ "${current_command_type}" =~ file|function ]] || return 0
 
-    local indent
+    declare indent
     indent=$((stack_depth-1))
 
-    local padding
+    declare padding
     padding=$(printf "%${indent}s" | tr ' ' '|')
 
     # This intermediate variable exists solely for Bash 4.2 compatibility.
@@ -196,23 +196,23 @@ log_cmd_trap () {
     #
     # This does not solve the problem in general, we just ensure this
     # debug trap handler does not contribute to it.
-    local msg
+    declare msg
     msg=$(printf 'CMD %s%s%s\n' "${padding}${padding:+ }" "${current_fn:+${current_fn}(): }" "${*}" | head -n 1 | colorized GREEN)
 
     printf '%s\n' "$msg"  >&2
 }
 
 throw () {
-    local msg="${1}"
+    declare msg="${1}"
 
     printf '%s\n' "${msg}" | colorized RED >&2
     exit 1
 }
 
 to_file () {
-    local target_path="${1}"
-    local callback="${2:-}"
-    local restore_pipefail mtime_before mtime_after
+    declare target_path="${1}"
+    declare callback="${2:-}"
+    declare restore_pipefail mtime_before mtime_after
 
     # diff will return non-zero exit code if file differs, therefore
     # pipefail shell attribute should be disabled for this
@@ -240,7 +240,7 @@ to_file () {
 }
 
 quoted () {
-    local -a result=()
+    declare -a result=()
 
     for token in "${@}"; do
         result+=("$(printf "%q" "${token}")")
@@ -254,9 +254,9 @@ md5 () {
 }
 
 joined () {
-    local sep="${1}"
+    declare sep="${1}"
     shift
-    local item
+    declare item
 
     [[ "${#}" -gt 0 ]] || return 0
 
@@ -288,7 +288,7 @@ local_kernel () {
 }
 
 file_mode () {
-    local path="${1}"
+    declare path="${1}"
 
     case "$(local_kernel)" in
         FreeBSD|OpenBSD|Darwin)
@@ -304,7 +304,7 @@ file_mode () {
 }
 
 file_owner () {
-    local path="${1}"
+    declare path="${1}"
 
     case "$(local_kernel)" in
         FreeBSD|OpenBSD|Darwin)
@@ -320,7 +320,7 @@ file_owner () {
 }
 
 file_mtime () {
-    local path="${1}"
+    declare path="${1}"
 
     case "$(local_kernel)" in
         FreeBSD|OpenBSD|Darwin)
@@ -341,7 +341,7 @@ tmux_command () {
 }
 
 multiplexer_present () {
-    local multiplexer
+    declare multiplexer
 
     for multiplexer in "${AUTOMATED_SUPPORTED_MULTIPLEXERS[@]}"; do
         if cmd_is_available "${multiplexer}"; then
@@ -354,15 +354,15 @@ multiplexer_present () {
 }
 
 run_in_tmux () {
-    local command="${1}"
+    declare command="${1}"
 
     if tmux_command ls 2>/dev/null | to_debug; then
         log_debug "Multiplexer is already running"
         exit "${AUTOMATED_EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX}"
     fi
 
-    local sock_file="${AUTOMATED_TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}"
-    local fifo_file="${AUTOMATED_TMUX_FIFO_PREFIX}-${AUTOMATED_OWNER_UID}"
+    declare sock_file="${AUTOMATED_TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}"
+    declare fifo_file="${AUTOMATED_TMUX_FIFO_PREFIX}-${AUTOMATED_OWNER_UID}"
 
     log_debug "Starting multiplexer and executing commands"
 
@@ -392,7 +392,7 @@ EOF
 }
 
 run_in_multiplexer () {
-    local multiplexer
+    declare multiplexer
 
     if ! multiplexer=$(multiplexer_present); then
         throw "Multiplexer is not available. Please install one of the following: ${AUTOMATED_SUPPORTED_MULTIPLEXERS[*]}"
@@ -411,13 +411,13 @@ interactive_multiplexer_session () {
 }
 
 interactive_answer () {
-    local target="${1}"
-    local prompt="${2}"
-    local default_value="${3:-}"
+    declare target="${1}"
+    declare prompt="${2}"
+    declare default_value="${3:-}"
 
-    local answer
+    declare answer
 
-    local -a message=("${prompt}" "(${target})")
+    declare -a message=("${prompt}" "(${target})")
     [[ -z "${default_value}" ]] || message+=("[${default_value}]")
 
     {
@@ -435,17 +435,17 @@ interactive_answer () {
 }
 
 interactive_secret () {
-    local -a AUTOMATED_ANSWER_READ_COMMAND=('read' '-r' '-s')
+    declare -a AUTOMATED_ANSWER_READ_COMMAND=('read' '-r' '-s')
 
     interactive_answer "${@}"
 }
 
 confirm () {
-    local target="${1}"
-    local prompt="${2}"
-    local default_value="${3:-N}"
+    declare target="${1}"
+    declare prompt="${2}"
+    declare default_value="${3:-N}"
 
-    local answer
+    declare answer
 
     while true; do
         answer=$(interactive_answer "${target}" "${prompt} Y/N?" "${default_value}")
@@ -460,13 +460,13 @@ confirm () {
 }
 
 target_as_vars () {
-    local target="${1}"
-    local username_var="${2:-username}"
-    local address_var="${3:-address}"
-    local port_var="${4:-port}"
+    declare target="${1}"
+    declare username_var="${2:-username}"
+    declare address_var="${3:-address}"
+    declare port_var="${4:-port}"
 
-    local username address port
-    local -a args=()
+    declare username address port
+    declare -a args=()
 
     if [[ "${target}" =~ ^((.+)@)?(\[([:0-9A-Fa-f]+)\])(:([0-9]+))?$ ]] ||
            [[ "${target}" =~ ^((.+)@)?(([-.0-9A-Za-z]+))(:([0-9]+))?$ ]]; then
@@ -479,8 +479,8 @@ target_as_vars () {
 }
 
 target_address_only () {
-    local target="${1}"
-    local username address port
+    declare target="${1}"
+    declare username address port
 
     eval "$(target_as_vars "${target}" username address port)"
 
@@ -488,9 +488,9 @@ target_address_only () {
 }
 
 target_as_ssh_arguments () {
-    local target="${1}"
-    local username address port
-    local -a args=()
+    declare target="${1}"
+    declare username address port
+    declare -a args=()
 
     eval "$(target_as_vars "${target}" username address port)"
 
@@ -508,15 +508,15 @@ target_as_ssh_arguments () {
 }
 
 is_function () {
-    local name="${1}"
+    declare name="${1}"
 
     [[ "$(type -t "${name}")" = 'function' ]]
 }
 
 file_as_code () {
-    local src="${1}"
-    local dst="${2}"
-    local mode boundary
+    declare src="${1}"
+    declare dst="${2}"
+    declare mode boundary
 
     if [[ -d "${src}" ]]; then
         throw "${src} is a directory. directories are not supported"
@@ -555,9 +555,9 @@ EOF
 
 
 file_as_function () {
-    local src="${1}"
-    local file_id="${2:-${src}}"
-    local mode file_id_hash
+    declare src="${1}"
+    declare file_id="${2:-${src}}"
+    declare mode file_id_hash
 
     if [[ -d "${src}" ]]; then
         throw "${src} is a directory. directories are not supported"
@@ -596,7 +596,7 @@ EOF
 }
 
 declared_var () {
-    local var="${1}"
+    declare var="${1}"
 
     (
         set -e
@@ -613,17 +613,17 @@ declared_var () {
 }
 
 declared_function () {
-    local fn="${1}"
+    declare fn="${1}"
 
     declare -f "${fn}"
     printf 'log_debug "declared function %s"\n' "$(quoted "${fn}")"
 }
 
 drop () {
-    local file_id="${1}"
-    local dst="${2:-}"
+    declare file_id="${1}"
+    declare dst="${2:-}"
 
-    local mode file_id_hash mode_var
+    declare mode file_id_hash mode_var
 
     file_id_hash=$(md5 <<< "${file_id}")
 
@@ -648,9 +648,9 @@ drop () {
 }
 
 sourced_drop () {
-    local file_id="${1}"
+    declare file_id="${1}"
 
-    local file_id_hash
+    declare file_id_hash
 
     file_id_hash=$(md5 <<< "${file_id}")
 
@@ -662,7 +662,7 @@ EOF
 }
 
 exit_after () {
-    local exit_code="${1}"
+    declare exit_code="${1}"
     shift
 
     "${@}"
@@ -701,7 +701,7 @@ python_interpreter () {
 }
 
 semver_matches_one_of () {
-    local version_to_match="${1}"
+    declare version_to_match="${1}"
     shift
 
     declare -r SEMVER_RE='^([0-9]+).([0-9]+).([0-9]+)(-([0-9A-Za-z.-]+))?(\+([0-9A-Za-z.-]))?$'
@@ -736,8 +736,8 @@ semver_matches_one_of () {
 }
 
 bash_minor_version_is_higher_than () {
-    local major="${1}"
-    local minor="${2}"
+    declare major="${1}"
+    declare minor="${2}"
 
     ! [[ "${BASH_VERSINFO[0]}" -lt "${major}" ]] || return 1
 
@@ -751,7 +751,7 @@ supported_automated_versions () {
 }
 
 automated_bootstrap_environment () {
-    local target="${1}"
+    declare target="${1}"
 
     cat <<EOF
 #!/usr/bin/env bash
