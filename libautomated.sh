@@ -720,7 +720,7 @@ bash_minor_version_is_higher_than () {
     local major="${1}"
     local minor="${2}"
 
-    ! [[ "${BASH_VERSION[0]}" -lt "${major}" ]] || return 1
+    ! [[ "${BASH_VERSINFO[0]}" -lt "${major}" ]] || return 1
 
     ! [[ "${BASH_VERSINFO[0]}" -eq "${major}" && "${BASH_VERSINFO[1]}" -lt "${minor}" ]] || return 1
 }
