@@ -43,8 +43,6 @@ AUTOMATED_TMUX_FIFO_PREFIX="${AUTOMATED_TMUX_FIFO_PREFIX:-/tmp/tmux-fifo}"
 
 declare -a AUTOMATED_ANSWER_READ_COMMAND=('read' '-r')
 
-declare -A AUTOMATED_FUNCTIONS=()
-
 is_true () {
     [[ "${1,,}" =~ ^(yes|true|on|1)$ ]]
 }
@@ -156,27 +154,38 @@ log_debug () {
 }
 
 log_cmd_trap () {
+    local bash_command_firstline
+    bash_command_firstline=$(printf '%s\n' "$BASH_COMMAND" | head -n 1)
+
     # shellcheck disable=SC2086
-    set -- $BASH_COMMAND
+    set -- $bash_command_firstline
 
     [[ "${#}" -gt 0 ]] || return 0
 
-    local current_command
-    current_command="${1}"
+    local stack_depth="${#FUNCNAME[@]}"
 
-    [[ "${#FUNCNAME[@]}" -gt 1 ]] || return 0
+    [[ "${stack_depth}" -gt 0 ]] || return 0
 
-    local parent_function
-    parent_function="${FUNCNAME[1]}"
+    ! [[ "${stack_depth}" -gt $((AUTOMATED_FUNCTRACE_DEPTH+1)) ]] || return 0
 
-    ! [[ "${parent_function}"  == "${current_command}" ]] || return 0
+    local current_fn="${FUNCNAME[1]:-}"
 
-    [[ "${AUTOMATED_FUNCTIONS["${parent_function}"]:-}" == 'user' ]] || return 0
+    # Only trace supported commands
+    local current_command="${1}"
+
+    # Filter out function entrypoints
+    ! [[ "${current_fn}" == "${current_command}" ]] || return 0
 
     local current_command_type
     current_command_type=$(type -t "${current_command}") || return 0
 
     [[ "${current_command_type}" =~ file|function ]] || return 0
+
+    local indent
+    indent=$((stack_depth-1))
+
+    local padding
+    padding=$(printf "%${indent}s" | tr ' ' '|')
 
     # This intermediate variable exists solely for Bash 4.2 compatibility.
     # A bug in this Bash version would cause all process substitution FIFOs
@@ -188,7 +197,7 @@ log_cmd_trap () {
     # This does not solve the problem in general, we just ensure this
     # debug trap handler does not contribute to it.
     local msg
-    msg=$(printf 'CMD %s(): %s\n' "${parent_function}" "$BASH_COMMAND" | head -n 1 | colorized GREEN)
+    msg=$(printf 'CMD %s%s%s\n' "${padding}${padding:+ }" "${current_fn:+${current_fn}(): }" "${*}" | head -n 1 | colorized GREEN)
 
     printf '%s\n' "$msg"  >&2
 }

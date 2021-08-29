@@ -31,6 +31,7 @@ AUTOMATED_SUDO_ENABLE="${AUTOMATED_SUDO_ENABLE:-FALSE}"
 AUTOMATED_SUDO_PASSWORDLESS="${AUTOMATED_SUDO_PASSWORDLESS:-FALSE}"
 AUTOMATED_SUDO_PASSWORD_ON_STDIN="${AUTOMATED_SUDO_PASSWORD_ON_STDIN:-FALSE}"
 AUTOMATED_SUDO_ASK_PASSWORD_CMD="${AUTOMATED_SUDO_ASK_PASSWORD_CMD:-ask_sudo_password}"
+AUTOMATED_FUNCTRACE_DEPTH="${AUTOMATED_FUNCTRACE_DEPTH:-2}"
 
 declare -a EXPORT_VARS=()
 declare -a EXPORT_FUNCTIONS=()
@@ -180,6 +181,10 @@ OPTIONS:
   -h, --help                  Display help text and exit
   --version                   Output version and exit
   -v, --verbose               Enable verbose output
+  --functrace-depth LEVEL     Set function trace call stack depth displayed in
+                              verbose output
+                              Default: ${AUTOMATED_FUNCTRACE_DEPTH}
+                              Env: AUTOMATED_FUNCTRACE_DEPTH
   --local                     Do the call locally. Any remote targets will
                               be ignored.
                               Default: ${AUTOMATED_EXECUTE_LOCALLY}
@@ -242,6 +247,7 @@ EOF
     declared_var AUTOMATED_CURRENT_TARGET
     declared_var AUTOMATED_TMUX_SOCK_PREFIX
     declared_var AUTOMATED_VERSION
+    declared_var AUTOMATED_FUNCTRACE_DEPTH
 
     if [[ "${#EXPORT_VARS[@]}" -gt 0 ]]; then
         for var in "${EXPORT_VARS[@]}"; do
@@ -275,42 +281,24 @@ EOF
         done
     fi
 
-    cat <<"EOF"
-declare -A AUTOMATED_FUNCTIONS=()
-while read -r fn; do
-  AUTOMATED_FUNCTIONS["${fn}"]='base'
-done < <(declare -F | cut -f 3 -d ' ')
-
-EOF
-
     if [[ "${#LOAD_PATHS[@]}" -gt 0 ]]; then
-        paths+=("${LOAD_PATHS[@]}")
-    fi
-
-    if [[ "${#paths[@]}" -gt 0 ]]; then
-        for path in "${paths[@]}"; do
+        for path in "${LOAD_PATHS[@]}"; do
             if [[ -d "${path}" ]]; then
                 for file_path in "${path%/}/"*.sh; do
-                    file_as_function "${file_path}"
-                    sourced_drop "${file_path}"
+                    paths+=("${file_path}")
                 done
             else
-                file_as_function "${path}"
-                sourced_drop "${path}"
+                paths+=("${path}")
             fi
         done
     fi
 
-    cat <<"EOF"
-while read -r fn; do
-  if [[ -z "${AUTOMATED_FUNCTIONS["${fn}"]:-}" ]]; then
-    AUTOMATED_FUNCTIONS["${fn}"]='user'
-  fi
-done < <(declare -F | cut -f 3 -d ' ')
-
-unset fn
-
-EOF
+    if [[ "${#paths[@]}" -gt 0 ]]; then
+        for path in "${paths[@]}"; do
+            file_as_function "${path}"
+            sourced_drop "${path}"
+        done
+    fi
 
     if [[ "${#MACROS[@]}" -gt 0 ]]; then
         for macro in "${MACROS[@]}"; do
@@ -346,7 +334,7 @@ rendered_script () {
     cat <<"EOF"
 if is_true "${AUTOMATED_DEBUG}"; then
   set -o functrace
-  trap log_cmd_trap DEBUG
+  trap 'log_cmd_trap' DEBUG
 fi
 
 EOF
@@ -532,7 +520,7 @@ execute () {
 }
 
 parse_args () {
-    local list_file inventory_file path line
+    local list_file inventory_file path
     local -a pair
 
     while [[ "${#}" -gt 0 ]]; do
@@ -545,6 +533,11 @@ parse_args () {
 
             -v|--verbose)
                 AUTOMATED_DEBUG=TRUE
+                ;;
+
+            --functrace-depth)
+                AUTOMATED_FUNCTRACE_DEPTH="${2}"
+                shift
                 ;;
 
             --ssh-command)
