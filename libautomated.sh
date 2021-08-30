@@ -43,13 +43,16 @@ AUTOMATED_TMUX_FIFO_PREFIX="${AUTOMATED_TMUX_FIFO_PREFIX:-/tmp/tmux-fifo}"
 
 declare -a AUTOMATED_ANSWER_READ_COMMAND=('read' '-r')
 
+
 is_true () {
     [[ "${1,,}" =~ ^(yes|true|on|1)$ ]]
 }
 
+
 printable_only () {
   tr -cd '\11\12\15\40-\176'
 }
+
 
 translated () {
     declare str="$1"
@@ -67,12 +70,14 @@ translated () {
     printf '%s\n' "$str"
 }
 
+
 sed_replacement () {
     declare str="$1"
 
     # shellcheck disable=SC1003
     translated "$str" '\' '\\' '/' '\/' '&' '\&' $'\n' '\n'
 }
+
 
 colorized () {
     declare fg_colour="$1"
@@ -105,17 +110,20 @@ colorized () {
     fi
 }
 
+
 text_block () {
     declare name="$1"
 
     sed -e 1s/^/"$(sed_replacement "BEGIN ${name}")"\\n/ -e \$s/$/\\n"$(sed_replacement "END ${name}")"/
 }
 
+
 prefixed_lines () {
     declare prefix="$1"
 
     sed -e "s/^/$(sed_replacement "$prefix")/"
 }
+
 
 # shellcheck disable=SC2120
 to_debug () {
@@ -128,9 +136,11 @@ to_debug () {
     fi
 }
 
+
 pipe_debug () {
     tee >(to_debug)
 }
+
 
 log_info () {
     declare msg="$1"
@@ -138,11 +148,13 @@ log_info () {
     printf '%s\n' "$msg" | colorized WHITE >&2
 }
 
+
 log_error () {
     declare msg="$1"
 
     printf 'ERROR %s\n' "$msg" | colorized RED >&2
 }
+
 
 log_debug () {
     declare msg="$1"
@@ -152,6 +164,7 @@ log_debug () {
         printf 'DEBUG %s\n' "$msg" | colorized "$fg_colour" >&2
     fi
 }
+
 
 log_cmd_trap () {
     declare bash_command_firstline
@@ -202,12 +215,14 @@ log_cmd_trap () {
     printf '%s\n' "$msg"  >&2
 }
 
+
 throw () {
     declare msg="$1"
 
     printf '%s\n' "$msg" | colorized RED >&2
     exit 1
 }
+
 
 to_file () {
     declare target_path="$1"
@@ -239,6 +254,7 @@ to_file () {
     eval "$restore_pipefail"
 }
 
+
 quoted () {
     declare -a result=()
 
@@ -251,9 +267,11 @@ quoted () {
     printf '%s\n' "${result[*]}"
 }
 
+
 md5 () {
     md5sum -b | cut -f 1 -d ' '
 }
+
 
 joined () {
     declare sep="$1"
@@ -272,22 +290,27 @@ joined () {
     printf '\n'
 }
 
+
 cmd_is_available () {
     command -v "$1" >/dev/null 2>&1
 }
+
 
 readable_file () {
     [[ -f "$1" && -r "$1" ]]
 }
 
+
 readable_directory () {
     [[ -d "$1" && -r "$1" ]]
 }
+
 
 # TODO: Replace with $OSTYPE?
 local_kernel () {
     uname -s
 }
+
 
 file_mode () {
     declare path="$1"
@@ -305,6 +328,7 @@ file_mode () {
     esac
 }
 
+
 file_owner () {
     declare path="$1"
 
@@ -320,6 +344,7 @@ file_owner () {
             ;;
     esac
 }
+
 
 file_mtime () {
     declare path="$1"
@@ -337,10 +362,12 @@ file_mtime () {
     esac
 }
 
+
 tmux_command () {
     log_debug "tmux command ${*} over the ${AUTOMATED_TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID} socket" BRIGHT_BLUE
     tmux -S "${AUTOMATED_TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}" "$@"
 }
+
 
 multiplexer_present () {
     declare multiplexer
@@ -354,6 +381,7 @@ multiplexer_present () {
 
     return 1
 }
+
 
 run_in_tmux () {
     declare command="$1"
@@ -394,6 +422,7 @@ EOF
     exit "$AUTOMATED_EXIT_RUNNING_IN_TMUX"
 }
 
+
 run_in_multiplexer () {
     declare multiplexer
 
@@ -408,10 +437,12 @@ run_in_multiplexer () {
     esac
 }
 
+
 # shellcheck disable=SC2016
 interactive_multiplexer_session () {
     run_in_multiplexer "bash -i -s -- <(automated_bootstrap_environment $(quoted "$AUTOMATED_CURRENT_TARGET")) <<< $(quoted 'source $1; exec </dev/tty')"
 }
+
 
 interactive_answer () {
     declare target="$1"
@@ -437,11 +468,13 @@ interactive_answer () {
     fi
 }
 
+
 interactive_secret () {
     declare -a AUTOMATED_ANSWER_READ_COMMAND=('read' '-r' '-s')
 
     interactive_answer "$@"
 }
+
 
 confirm () {
     declare target="$1"
@@ -462,6 +495,7 @@ confirm () {
     done
 }
 
+
 target_as_vars () {
     declare target="$1"
     declare username_var="${2:-username}"
@@ -481,6 +515,7 @@ target_as_vars () {
     fi
 }
 
+
 target_address_only () {
     declare target="$1"
     declare username address port
@@ -489,6 +524,7 @@ target_address_only () {
 
     printf '%s\n' "${address}${port:+:${port}}"
 }
+
 
 target_as_ssh_arguments () {
     declare target="$1"
@@ -510,11 +546,13 @@ target_as_ssh_arguments () {
     printf '%s\n' "${args[@]}"
 }
 
+
 is_function () {
     declare name="$1"
 
     [[ "$(type -t "$name")" = 'function' ]]
 }
+
 
 file_as_code () {
     declare src="$1"
@@ -598,6 +636,7 @@ log_debug $(quoted "shipped ${src} as the file id ${file_id}")
 EOF
 }
 
+
 declared_var () {
     declare var="$1"
 
@@ -615,12 +654,14 @@ declared_var () {
     printf 'log_debug "declared variable %s"\n' "$(quoted "$var")"
 }
 
+
 declared_function () {
     declare fn="$1"
 
     declare -f "$fn"
     printf 'log_debug "declared function %s"\n' "$(quoted "$fn")"
 }
+
 
 drop () {
     declare file_id="$1"
@@ -650,6 +691,7 @@ drop () {
     fi
 }
 
+
 sourced_drop () {
     declare file_id="$1"
 
@@ -664,6 +706,7 @@ log_debug $(quoted "sourced file id ${file_id}")
 EOF
 }
 
+
 exit_after () {
     declare exit_code="$1"
     shift
@@ -672,6 +715,7 @@ exit_after () {
 
     exit "$exit_code"
 }
+
 
 base64_encode () {
     if [[ "$(local_kernel)" = 'Linux' ]] && cmd_is_available base64; then
@@ -685,6 +729,7 @@ base64_encode () {
     printf '\n'
 }
 
+
 base64_decode () {
     if [[ "$(local_kernel)" = 'Linux' ]] && cmd_is_available base64; then
         base64 -d
@@ -695,6 +740,7 @@ base64_decode () {
     fi
 }
 
+
 python_interpreter () {
     if cmd_is_available python3; then
         python3 "$@"
@@ -702,6 +748,7 @@ python_interpreter () {
         python2 "$@"
     fi
 }
+
 
 semver_matches_one_of () {
     declare version_to_match="$1"
@@ -738,6 +785,7 @@ semver_matches_one_of () {
     return 1
 }
 
+
 bash_minor_version_is_higher_than () {
     declare major="$1"
     declare minor="$2"
@@ -747,11 +795,13 @@ bash_minor_version_is_higher_than () {
     ! [[ "${BASH_VERSINFO[0]}" -eq "$major" && "${BASH_VERSINFO[1]}" -lt "$minor" ]] || return 1
 }
 
+
 supported_automated_versions () {
     if ! semver_matches_one_of "$AUTOMATED_VERSION" "$@"; then
         throw "Unsupported version ${AUTOMATED_VERSION} of Automated detected. Supported versions are: $(joined ', ' "$@")"
     fi
 }
+
 
 automated_bootstrap_environment () {
     declare target="$1"
@@ -799,9 +849,11 @@ deprecated_with () {
     "$@"
 }
 
+
 deprecated_with_alternatives () {
     log_debug "${FUNCNAME[1]}() is DEPRECATED. Alternatives ${*}"
 }
+
 
 deprecated_function () {
     log_debug "${FUNCNAME[1]}() is DEPRECATED."

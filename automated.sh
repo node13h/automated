@@ -52,6 +52,7 @@ ssh_command () {
     eval "${AUTOMATED_SSH_CMD} $(quoted "$@")"
 }
 
+
 # This command is usually run on the controlling workstation, not remote
 attach_to_multiplexer () {
     declare multiplexer="$1"
@@ -82,6 +83,7 @@ attach_to_multiplexer () {
     "${handler[@]}" "$command"
 }
 
+
 ask_sudo_password () {
     declare sudo_password
 
@@ -93,6 +95,7 @@ ask_sudo_password () {
 
     printf '%s\n' "$sudo_password"
 }
+
 
 usage () {
     cat <<EOF
@@ -224,6 +227,7 @@ OPTIONS:
 EOF
 }
 
+
 automated_environment_script () {
     # shellcheck disable=SC2034
     declare AUTOMATED_CURRENT_TARGET="$1"
@@ -306,6 +310,7 @@ EOF
         done
     fi
 }
+
 
 rendered_script () {
     declare target="$1"
@@ -518,6 +523,7 @@ execute () {
         attach_to_multiplexer "$multiplexer" "$target"
     fi
 }
+
 
 parse_args () {
     declare list_file inventory_file path
