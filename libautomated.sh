@@ -106,7 +106,7 @@ colorized () {
     if is_true "$AUTOMATED_DISABLE_COLOUR"; then
         cat
     else
-        sed -e s/^/$'\e'\["${colour_mappings[${fg_colour}]}"m/ -e s/$/$'\e'\[0m/
+        sed -u -e s/^/$'\e'\["${colour_mappings[${fg_colour}]}"m/ -e s/$/$'\e'\[0m/
     fi
 }
 
@@ -130,7 +130,7 @@ prefixed_lines () {
     declare sed_replacement
     sed_replacement=$(set -e; sed_replacement "$prefix")
 
-    sed -e s/^/"${sed_replacement}"/
+    sed -u -e s/^/"${sed_replacement}"/
 }
 
 
