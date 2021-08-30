@@ -49,12 +49,12 @@ EXIT_SUDO_PASSWORD_REQUIRED=67
 
 
 ssh_command () {
-    eval "${AUTOMATED_SSH_CMD} $(quoted "${@}")"
+    eval "${AUTOMATED_SSH_CMD} $(quoted "$@")"
 }
 
 # This command is usually run on the controlling workstation, not remote
 attach_to_multiplexer () {
-    declare multiplexer="${1}"
+    declare multiplexer="$1"
     declare target="${2:-LOCAL HOST}"
 
     declare -a handler
@@ -62,36 +62,36 @@ attach_to_multiplexer () {
 
     declare -a ssh_args
 
-    if is_true "${AUTOMATED_EXECUTE_LOCALLY}"; then
+    if is_true "$AUTOMATED_EXECUTE_LOCALLY"; then
         handler=(eval)
     else
-        mapfile -t ssh_args < <(target_as_ssh_arguments "${target}")
+        mapfile -t ssh_args < <(target_as_ssh_arguments "$target")
         handler=('ssh_command' '-t' '-q' "${ssh_args[@]}" '--')
     fi
 
-    case "${multiplexer}" in
+    case "$multiplexer" in
         tmux)
             # shellcheck disable=SC2016
-            command="tmux -S $(quoted "${AUTOMATED_TMUX_SOCK_PREFIX}")-\"\$(id -u)\" attach"
+            command="tmux -S $(quoted "$AUTOMATED_TMUX_SOCK_PREFIX")-\"\$(id -u)\" attach"
             ;;
     esac
 
     log_debug "Attaching via ${handler[*]}" BRIGHT_BLUE
     log_debug "Attach command: ${command}"
 
-    "${handler[@]}" "${command}"
+    "${handler[@]}" "$command"
 }
 
 ask_sudo_password () {
     declare sudo_password
 
-    if is_true "${AUTOMATED_SUDO_PASSWORD_ON_STDIN}"; then
+    if is_true "$AUTOMATED_SUDO_PASSWORD_ON_STDIN"; then
         read -r sudo_password
     else
         sudo_password=$(interactive_secret "${1:-localhost}" "SUDO password")
     fi
 
-    printf '%s\n' "${sudo_password}"
+    printf '%s\n' "$sudo_password"
 }
 
 usage () {
@@ -226,7 +226,7 @@ EOF
 
 automated_environment_script () {
     # shellcheck disable=SC2034
-    declare AUTOMATED_CURRENT_TARGET="${1}"
+    declare AUTOMATED_CURRENT_TARGET="$1"
 
     declare var fn pair macro path file_path
 
@@ -254,15 +254,15 @@ EOF
             (
                 set -e
 
-                if [[ "${var}" == *=* ]]; then
+                if [[ "$var" == *=* ]]; then
                     declare key value
 
                     key="${var%%=*}"
                     value="${var#*=}"
 
-                    declared_var "${key}" "${value}"
+                    declared_var "$key" "$value"
                 else
-                    declared_var "${var}"
+                    declared_var "$var"
                 fi
             )
         done
@@ -270,7 +270,7 @@ EOF
 
     if [[ "${#EXPORT_FUNCTIONS[@]}" -gt 0 ]]; then
         for fn in "${EXPORT_FUNCTIONS[@]}"; do
-            declared_function "${fn}"
+            declared_function "$fn"
         done
     fi
 
@@ -283,46 +283,46 @@ EOF
 
     if [[ "${#LOAD_PATHS[@]}" -gt 0 ]]; then
         for path in "${LOAD_PATHS[@]}"; do
-            if [[ -d "${path}" ]]; then
+            if [[ -d "$path" ]]; then
                 for file_path in "${path%/}/"*.sh; do
-                    paths+=("${file_path}")
+                    paths+=("$file_path")
                 done
             else
-                paths+=("${path}")
+                paths+=("$path")
             fi
         done
     fi
 
     if [[ "${#paths[@]}" -gt 0 ]]; then
         for path in "${paths[@]}"; do
-            file_as_function "${path}"
-            sourced_drop "${path}"
+            file_as_function "$path"
+            sourced_drop "$path"
         done
     fi
 
     if [[ "${#MACROS[@]}" -gt 0 ]]; then
         for macro in "${MACROS[@]}"; do
-            eval "${macro}"
+            eval "$macro"
         done
     fi
 }
 
 rendered_script () {
-    declare target="${1}"
-    declare command="${2}"
+    declare target="$1"
+    declare command="$2"
 
     declare pair
 
     # sudo password has to go first!
-    if is_true "${AUTOMATED_SUDO_ENABLE}"; then
-        if is_true "${AUTOMATED_DUMP_SCRIPT}"; then
+    if is_true "$AUTOMATED_SUDO_ENABLE"; then
+        if is_true "$AUTOMATED_DUMP_SCRIPT"; then
             printf '%s\n' '*** SUDO PASSWORD IS HIDDEN IN SCRIPT DUMP MODE ***'
         else
-            printf '%s\n' "${sudo_password}"  # This one will be consumed by the PTY helper
+            printf '%s\n' "$sudo_password"  # This one will be consumed by the PTY helper
         fi
     fi
 
-    automated_bootstrap_environment "${target}"
+    automated_bootstrap_environment "$target"
 
     if [[ "${#COPY_PAIRS[@]}" -gt 0 ]]; then
         for pair in "${COPY_PAIRS[@]}"; do
@@ -341,7 +341,7 @@ EOF
 
     # This block has to be the last block in the script as it
     # joins the STDIN of this script to the STDIN of the executed command
-    if is_true "${AUTOMATED_PASS_STDIN}"; then
+    if is_true "$AUTOMATED_PASS_STDIN"; then
         cat <<EOF
 {
     ${command}
@@ -377,33 +377,33 @@ EOF
 
 
 handler_command () {
-    declare force_sudo_password="${1}"
+    declare force_sudo_password="$1"
     declare -a handler=()
 
     declare -a command_environment=()
 
     declare packaged_pty_helper_script pty_helper_command
 
-    if is_true "${AUTOMATED_DUMP_SCRIPT}"; then
+    if is_true "$AUTOMATED_DUMP_SCRIPT"; then
         handler=(cat)
     else
-        if is_true "${AUTOMATED_EXECUTE_LOCALLY}"; then
+        if is_true "$AUTOMATED_EXECUTE_LOCALLY"; then
             handler=(eval)
         else
-            mapfile -t ssh_args < <(target_as_ssh_arguments "${target}")
+            mapfile -t ssh_args < <(target_as_ssh_arguments "$target")
             handler=('ssh_command' '-q' "${ssh_args[@]}" '--')
         fi
 
-        if is_true "${AUTOMATED_SUDO_ENABLE}"; then
+        if is_true "$AUTOMATED_SUDO_ENABLE"; then
             for var in SUDO_UID_VARIABLE EXIT_TIMEOUT EXIT_SUDO_PASSWORD_NOT_ACCEPTED EXIT_SUDO_PASSWORD_REQUIRED; do
                 command_environment+=("${var}=$(quoted "${!var}")")
             done
 
             packaged_pty_helper_script=$(gzip <"${AUTOMATED_LIBDIR%/}/pty_helper.py" | base64_encode)
             # shellcheck disable=SC2016
-            pty_helper_command=('"${PYTHON_INTERPRETER}"' "<(\"\${PYTHON_INTERPRETER}\" -m base64 -d <<< ${packaged_pty_helper_script} | gunzip)")
+            pty_helper_command=('"$PYTHON_INTERPRETER"' "<(\"\$PYTHON_INTERPRETER\" -m base64 -d <<< ${packaged_pty_helper_script} | gunzip)")
 
-            if ! is_true "${force_sudo_password}" && is_true "${AUTOMATED_SUDO_PASSWORDLESS}"; then
+            if ! is_true "$force_sudo_password" && is_true "$AUTOMATED_SUDO_PASSWORDLESS"; then
                 pty_helper_command+=("--sudo-passwordless")
             fi
 
@@ -422,7 +422,7 @@ handler_command () {
 
 
 execute () {
-    declare command="${1}"
+    declare command="$1"
     declare target="${2:-LOCAL HOST}"
 
     declare sudo_password
@@ -438,15 +438,15 @@ execute () {
 
         rc=0
 
-        if is_true "${AUTOMATED_SUDO_ENABLE}"; then
-            if is_true "${force_sudo_password}" || ! is_true "${AUTOMATED_SUDO_PASSWORDLESS}"; then
-                sudo_password=$("${AUTOMATED_SUDO_ASK_PASSWORD_CMD}" "${target}")
+        if is_true "$AUTOMATED_SUDO_ENABLE"; then
+            if is_true "$force_sudo_password" || ! is_true "$AUTOMATED_SUDO_PASSWORDLESS"; then
+                sudo_password=$("$AUTOMATED_SUDO_ASK_PASSWORD_CMD" "$target")
             fi
         fi
 
         log_debug "Executing on ${target}"
 
-        if is_true "${AUTOMATED_PREFIX_TARGET_OUTPUT}"; then
+        if is_true "$AUTOMATED_PREFIX_TARGET_OUTPUT"; then
             output_processor=(prefixed_lines "${target}: ")
         else
             output_processor=(cat)
@@ -460,20 +460,20 @@ execute () {
             # substitution. The RENDERED_SCRIPT_STDIN FD is used to connect main
             # process STDIN to coproc STDIN to enable the --stdin feature.
             declare cpid
-            { coproc rendered_script "${target}" "${command}" <&"${RENDERED_SCRIPT_STDIN}"; } {RENDERED_SCRIPT_STDIN}<&0
+            { coproc rendered_script "$target" "$command" <&"$RENDERED_SCRIPT_STDIN"; } {RENDERED_SCRIPT_STDIN}<&0
 
-            cpid="${COPROC_PID}"
+            cpid="$COPROC_PID"
 
-            handler_command "${force_sudo_password}" > >("${output_processor[@]}") 2> >("${output_processor[@]}" >&2) < <(cat <&"${COPROC[0]}")
+            handler_command "$force_sudo_password" > >("${output_processor[@]}") 2> >("${output_processor[@]}" >&2) < <(cat <&"${COPROC[0]}")
 
             wait "$cpid"
         )
         rc="$?"
         set -e
 
-        case "${rc}" in
-            "${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}")
-                if is_true "${AUTOMATED_SUDO_PASSWORD_ON_STDIN}"; then
+        case "$rc" in
+            "$EXIT_SUDO_PASSWORD_NOT_ACCEPTED")
+                if is_true "$AUTOMATED_SUDO_PASSWORD_ON_STDIN"; then
                     log_debug "SUDO password was provided on STDIN, but rejected by the target. Can't prompt, giving up"
                     break
                 else
@@ -481,7 +481,7 @@ execute () {
                 fi
                 ;;
 
-            "${EXIT_SUDO_PASSWORD_REQUIRED}")
+            "$EXIT_SUDO_PASSWORD_REQUIRED")
                 log_debug "${target} requested the password for SUDO, disabling passwordless SUDO mode for this target and looping over."
                 force_sudo_password=TRUE
                 ;;
@@ -492,30 +492,30 @@ execute () {
 
     done
 
-    case "${rc}" in
-        "${EXIT_TIMEOUT}")
+    case "$rc" in
+        "$EXIT_TIMEOUT")
             throw "Timeout while connecting to ${target}"
             ;;
 
-        "${AUTOMATED_EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX}")
+        "$AUTOMATED_EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX")
             log_info "Terminal multiplexer appears to be already running. Attaching ..."
             do_attach=TRUE
             multiplexer='tmux'
             ;;
 
-        "${AUTOMATED_EXIT_RUNNING_IN_TMUX}")
-            do_attach="${AUTOMATED_AUTO_ATTACH}"
+        "$AUTOMATED_EXIT_RUNNING_IN_TMUX")
+            do_attach="$AUTOMATED_AUTO_ATTACH"
             multiplexer='tmux'
             ;;
 
         *)
-            return "${rc}"
+            return "$rc"
             ;;
     esac
 
-    if is_true "${do_attach}"; then
+    if is_true "$do_attach"; then
         log_debug "Attaching to multiplexer (${multiplexer}) ..."
-        attach_to_multiplexer "${multiplexer}" "${target}"
+        attach_to_multiplexer "$multiplexer" "$target"
     fi
 }
 
@@ -523,9 +523,9 @@ parse_args () {
     declare list_file inventory_file path
     declare -a pair
 
-    while [[ "${#}" -gt 0 ]]; do
+    while [[ "$#" -gt 0 ]]; do
 
-        case "${1}" in
+        case "$1" in
 
             -h|--help|help|'')
                 exit_after 0 usage
@@ -536,12 +536,12 @@ parse_args () {
                 ;;
 
             --functrace-depth)
-                AUTOMATED_FUNCTRACE_DEPTH="${2}"
+                AUTOMATED_FUNCTRACE_DEPTH="$2"
                 shift
                 ;;
 
             --ssh-command)
-                AUTOMATED_SSH_CMD="${2}"
+                AUTOMATED_SSH_CMD="$2"
                 shift
                 ;;
 
@@ -558,7 +558,7 @@ parse_args () {
                 ;;
 
             --sudo-ask-password-cmd)
-                AUTOMATED_SUDO_ASK_PASSWORD_CMD="${2}"
+                AUTOMATED_SUDO_ASK_PASSWORD_CMD="$2"
                 shift
                 ;;
 
@@ -580,12 +580,12 @@ parse_args () {
                 ;;
 
             --tmux-sock-prefix)
-                AUTOMATED_TMUX_SOCK_PREFIX="${2}"
+                AUTOMATED_TMUX_SOCK_PREFIX="$2"
                 shift
                 ;;
 
             --tmux-fifo-prefix)
-                AUTOMATED_TMUX_FIFO_PREFIX="${2}"
+                AUTOMATED_TMUX_FIFO_PREFIX="$2"
                 shift
                 ;;
 
@@ -594,61 +594,61 @@ parse_args () {
                 ;;
 
             --cp)
-                COPY_PAIRS+=("$(printf '%q %q' "${2}" "${3}")")
+                COPY_PAIRS+=("$(printf '%q %q' "$2" "$3")")
                 shift 2
                 ;;
 
             --cp-list)
-                list_file="${2}"
+                list_file="$2"
                 shift
 
-                mapfile -t -O "${#COPY_PAIRS[@]}" COPY_PAIRS < "${list_file}"
+                mapfile -t -O "${#COPY_PAIRS[@]}" COPY_PAIRS < "$list_file"
                 ;;
 
             --drag)
-                DRAG_PAIRS+=("$(printf '%q %q' "${2}" "${3}")")
+                DRAG_PAIRS+=("$(printf '%q %q' "$2" "$3")")
                 shift 2
                 ;;
 
             --drag-list)
-                list_file="${2}"
+                list_file="$2"
                 shift
 
-                mapfile -t -O "${#DRAG_PAIRS[@]}" DRAG_PAIRS < "${list_file}"
+                mapfile -t -O "${#DRAG_PAIRS[@]}" DRAG_PAIRS < "$list_file"
                 ;;
 
             -m|--macro)
-                MACROS+=("${2}")
+                MACROS+=("$2")
                 shift
                 ;;
 
             -l|--load)
-                LOAD_PATHS+=("${2}")
+                LOAD_PATHS+=("$2")
                 shift
                 ;;
 
             -c|--call)
-                AUTOMATED_CALL_CMD="${2}"
+                AUTOMATED_CALL_CMD="$2"
                 shift
                 ;;
 
             -e|--export)
-                EXPORT_VARS+=("${2}")
+                EXPORT_VARS+=("$2")
                 shift
                 ;;
 
             --export-fn)
-                if [[ "$(type -t "${2}")" = 'function' ]]; then
-                    EXPORT_FUNCTIONS+=("${2}")
+                if [[ "$(type -t "$2")" = 'function' ]]; then
+                    EXPORT_FUNCTIONS+=("$2")
                 fi
                 shift
                 ;;
 
             -i|--inventory)
-                inventory_file="${2}"
+                inventory_file="$2"
                 shift
-                if [[ -r "${inventory_file}" ]]; then
-                    mapfile -t -O "${#TARGETS[@]}" TARGETS < "${inventory_file}"
+                if [[ -r "$inventory_file" ]]; then
+                    mapfile -t -O "${#TARGETS[@]}" TARGETS < "$inventory_file"
                 else
                     throw "Could not read inventory file"
                 fi
@@ -659,16 +659,16 @@ parse_args () {
                 ;;
 
             --version)
-                exit_after 0 printf '%s\n' "${AUTOMATED_VERSION}"
+                exit_after 0 printf '%s\n' "$AUTOMATED_VERSION"
                 ;;
 
             --)
                 shift
-                TARGETS+=("${@}")
+                TARGETS+=("$@")
                 break
                 ;;
             *)
-                TARGETS+=("${1}")
+                TARGETS+=("$1")
                 ;;
         esac
 
@@ -681,25 +681,25 @@ parse_args () {
 main () {
     declare rc target
 
-    [[ "${#}" -gt 0 ]] || exit_after 1 usage >&2
+    [[ "$#" -gt 0 ]] || exit_after 1 usage >&2
 
     parse_args "$@"
 
-    if is_true "${AUTOMATED_EXECUTE_LOCALLY}"; then
-        execute "${AUTOMATED_CALL_CMD}"
+    if is_true "$AUTOMATED_EXECUTE_LOCALLY"; then
+        execute "$AUTOMATED_CALL_CMD"
     elif [[ "${#TARGETS[@]}" -gt 0 ]]; then
         for target in "${TARGETS[@]}"; do
 
             set +e
             (
                 set -e
-                execute "${AUTOMATED_CALL_CMD}" "${target}"
+                execute "$AUTOMATED_CALL_CMD" "$target"
             )
             rc="$?"
             set -e
 
-            if [[ "${rc}" -ne 0 ]]; then
-                is_true "${AUTOMATED_IGNORE_FAILED}" || exit "${rc}"
+            if [[ "$rc" -ne 0 ]]; then
+                is_true "$AUTOMATED_IGNORE_FAILED" || exit "$rc"
             fi
         done
     else
@@ -708,7 +708,7 @@ main () {
 }
 
 
-if [[ -n "${BASH_SOURCE[0]:-}" && "${0}" = "${BASH_SOURCE[0]}" ]]; then
+if ! (return 2> /dev/null); then
 
     AUTOMATED_PROG=$(basename "${BASH_SOURCE[0]:-}")
     AUTOMATED_PROG_DIR=$(dirname "${BASH_SOURCE[0]:-}")
@@ -718,5 +718,5 @@ if [[ -n "${BASH_SOURCE[0]:-}" && "${0}" = "${BASH_SOURCE[0]}" ]]; then
     # shellcheck source=libautomated.sh
     source "${AUTOMATED_LIBDIR%/}/libautomated.sh"
 
-    main "${@}"
+    main "$@"
 fi
