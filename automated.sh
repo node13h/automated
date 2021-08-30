@@ -49,7 +49,10 @@ EXIT_SUDO_PASSWORD_REQUIRED=67
 
 
 ssh_command () {
-    eval "${AUTOMATED_SSH_CMD} $(quoted "$@")"
+    declare command_quoted
+    command_quoted=$(set -e; quoted "$@")
+
+    eval "${AUTOMATED_SSH_CMD} ${command_quoted}"
 }
 
 
@@ -72,8 +75,11 @@ attach_to_multiplexer () {
 
     case "$multiplexer" in
         tmux)
+            declare socket_quoted
+            socket_quoted=$(set -e; quoted "$AUTOMATED_TMUX_SOCK_PREFIX")
+
             # shellcheck disable=SC2016
-            command="tmux -S $(quoted "$AUTOMATED_TMUX_SOCK_PREFIX")-\"\$(id -u)\" attach"
+            command="tmux -S ${socket_quoted}-\"\$(id -u)\" attach"
             ;;
     esac
 
@@ -90,7 +96,7 @@ ask_sudo_password () {
     if is_true "$AUTOMATED_SUDO_PASSWORD_ON_STDIN"; then
         read -r sudo_password
     else
-        sudo_password=$(interactive_secret "${1:-localhost}" "SUDO password")
+        sudo_password=$(set -e; interactive_secret "${1:-localhost}" "SUDO password")
     fi
 
     printf '%s\n' "$sudo_password"
@@ -400,8 +406,10 @@ handler_command () {
         fi
 
         if is_true "$AUTOMATED_SUDO_ENABLE"; then
+            declare var var_value_quoted
             for var in SUDO_UID_VARIABLE EXIT_TIMEOUT EXIT_SUDO_PASSWORD_NOT_ACCEPTED EXIT_SUDO_PASSWORD_REQUIRED; do
-                command_environment+=("${var}=$(quoted "${!var}")")
+                var_value_quoted=$(set -e; quoted "${!var}")
+                command_environment+=("${var}=${var_value_quoted}")
             done
 
             packaged_pty_helper_script=$(gzip <"${AUTOMATED_LIBDIR%/}/pty_helper.py" | base64_encode)
@@ -414,14 +422,21 @@ handler_command () {
 
             pty_helper_command+=(bash)
 
-            handler+=("bash --norc -euc $(quoted "PYTHON_INTERPRETER=\$(command -v python3 || command -v python2) && ${command_environment[*]} exec ${pty_helper_command[*]}")")
+            declare command_quoted
+            command_quoted=$(set -e; quoted "PYTHON_INTERPRETER=\$(command -v python3 || command -v python2) && ${command_environment[*]} exec ${pty_helper_command[*]}")
+
+            handler+=("bash --norc -euc ${command_quoted}")
 
         else
             handler+=(bash)
         fi
     fi
 
-    log_debug "Executing via $(quoted "${handler[@]}")" BRIGHT_BLUE
+    declare handler_commandline_quoted
+    handler_commandline_quoted=$(set -e; quoted "${handler[@]}")
+
+    log_debug "Executing via ${handler_commandline_quoted}" BRIGHT_BLUE
+
     "${handler[@]}"
 }
 
@@ -445,7 +460,7 @@ execute () {
 
         if is_true "$AUTOMATED_SUDO_ENABLE"; then
             if is_true "$force_sudo_password" || ! is_true "$AUTOMATED_SUDO_PASSWORDLESS"; then
-                sudo_password=$("$AUTOMATED_SUDO_ASK_PASSWORD_CMD" "$target")
+                sudo_password=$(set -e; "$AUTOMATED_SUDO_ASK_PASSWORD_CMD" "$target")
             fi
         fi
 

@@ -408,6 +408,10 @@ address.example.com
 EOF
 }
 
+test_target_as_ssh_arguments_invalid_fail () {
+    assert_fail 'target_as_ssh_arguments ""'
+}
+
 test_target_address_only_host () {
     assert_stdout 'target_address_only address.example.com' - <<"EOF"
 address.example.com
@@ -430,6 +434,10 @@ test_target_address_only_host_port () {
     assert_stdout 'target_address_only address.example.com:22' - <<"EOF"
 address.example.com:22
 EOF
+}
+
+test_target_address_only_invalid_fail () {
+    assert_fail 'target_address_only ""'
 }
 
 test_to_file_correct () {
@@ -496,10 +504,6 @@ EOF
 test_to_file_no_patch_correct () {
     declare rc temp_dir
 
-    # Ensure the test environment has the patch command.
-    # For more information see the to_file() source
-    assert_success 'command -v patch >/dev/null' 'Please install the patch command'
-
     temp_dir=$(mktemp -d)
 
     set +e
@@ -513,11 +517,9 @@ test_to_file_no_patch_correct () {
 
         patch_command 'function' 'cmd_is_available' 'cmd_is_available_mock "$@"'
 
-        temp_dir_quoted=$(printf '%q' "$temp_dir")
-
         echo 'Hello World' | to_file "${temp_dir%/}/test.txt"
 
-        assert_stdout "cat ${temp_dir_quoted%/}/test.txt" - <<< 'Hello World'
+        assert_stdout 'cat ${temp_dir%/}/test.txt' - <<< 'Hello World'
         unpatch_command 'cmd_is_available'
     )
     rc="$?"
@@ -529,7 +531,28 @@ test_to_file_no_patch_correct () {
     return "$rc"
 }
 
-test_declared_var_not_set () {
+test_to_file_fail () {
+    declare rc temp_dir
+
+    temp_dir=$(mktemp -d)
+
+    set +e
+    (
+        set -e
+
+        # shellcheck disable=SC2016
+        assert_fail 'to_file "${temp_dir%/}/test.txt" <&- 2>/dev/null'
+    )
+    rc="$?"
+    set -e
+
+    rm -f -- "${temp_dir%/}/test.txt"
+    rmdir -- "$temp_dir"
+
+    return "$rc"
+}
+
+test_declared_var_not_set_fail () {
     assert_fail 'declared_var THIS_VARIABLE_DOES_NOT_EXIST 2>/dev/null'
 }
 
@@ -559,6 +582,147 @@ log_debug "declared variable FOO"
 EOF
 }
 
+test_declared_function_correct () {
+    (
+        set -e
+
+        my_foo_function () {
+            echo "Hello World"
+        }
+
+        assert_stdout 'declared_function my_foo_function' - <<"EOF"
+my_foo_function () 
+{ 
+    echo "Hello World"
+}
+log_debug "declared function my_foo_function"
+EOF
+    )
+}
+
+test_declared_function_not_defined_fail () {
+    assert_fail 'declared_function THIS_FUNCTION_DOES_NOT_EXIST 2>/dev/null'
+}
+
+test_text_block_correct () {
+    assert_stdout 'echo "Hello World" | text_block Foo' - <<"EOF"
+BEGIN Foo
+Hello World
+END Foo
+EOF
+}
+
+test_text_block_empty () {
+    assert_stdout 'true | text_block Foo' - <<"EOF"
+EOF
+}
+
+test_text_block_fail () {
+    assert_fail 'text_block Foo <&- 2>/dev/null'
+}
+
+test_prefixed_lines_correct () {
+    assert_stdout 'printf "%s\n%s\n" "Hello" "World" | prefixed_lines "The Prefix"' - <<"EOF"
+The PrefixHello
+The PrefixWorld
+EOF
+}
+
+test_prefixed_lines_empty () {
+    assert_stdout 'true | prefixed_lines Prefix' - <<"EOF"
+EOF
+}
+
+test_prefixed_lines_fail () {
+    assert_fail 'prefixed_lines Prefix <&- 2>/dev/null'
+}
+
+test_file_mtime_correct () {
+    declare rc temp_dir
+
+    temp_dir=$(mktemp -d)
+
+    set +e
+    (
+        set -e
+
+        touch "${temp_dir%/}/test.txt"
+
+        declare actual_mtime
+        actual_mtime=$(stat -c "%Y" "${temp_dir%/}/test.txt")
+        # shellcheck disable=SC2016
+        assert_stdout 'file_mtime ${temp_dir%/}/test.txt' - <<< "$actual_mtime"
+    )
+    rc="$?"
+    set -e
+
+    rm -f -- "${temp_dir%/}/test.txt"
+    rmdir -- "$temp_dir"
+
+    return "$rc"
+}
+
+test_file_mtime_fail () {
+    assert_fail 'file_mtime /THIS/FILE/DOES/NOT/EXIST 2>/dev/null'
+}
+
+test_file_mode_correct () {
+    declare rc temp_dir
+
+    temp_dir=$(mktemp -d)
+
+    set +e
+    (
+        set -e
+
+        touch "${temp_dir%/}/test.txt"
+        chmod 0750 "${temp_dir%/}/test.txt"
+
+        # shellcheck disable=SC2016
+        assert_stdout 'file_mode ${temp_dir%/}/test.txt' - <<< "0750"
+    )
+    rc="$?"
+    set -e
+
+    rm -f -- "${temp_dir%/}/test.txt"
+    rmdir -- "$temp_dir"
+
+    return "$rc"
+}
+
+test_file_mode_fail () {
+    assert_fail 'file_mode /THIS/FILE/DOES/NOT/EXIST 2>/dev/null'
+}
+
+test_file_owner_correct () {
+    declare rc temp_dir
+
+    temp_dir=$(mktemp -d)
+
+    set +e
+    (
+        set -e
+
+        touch "${temp_dir%/}/test.txt"
+
+        declare actual_owner
+        actual_owner=$(stat -c "%U:%G" "${temp_dir%/}/test.txt")
+        # shellcheck disable=SC2016
+        assert_stdout 'file_owner ${temp_dir%/}/test.txt' - <<< "$actual_owner"
+    )
+    rc="$?"
+    set -e
+
+    rm -f -- "${temp_dir%/}/test.txt"
+    rmdir -- "$temp_dir"
+
+    return "$rc"
+}
+
+test_file_owner_fail () {
+    assert_fail 'file_owner /THIS/FILE/DOES/NOT/EXIST 2>/dev/null'
+}
+
 suite () {
     shelter_run_test_class upload test_file_as_function_
     shelter_run_test_class upload test_drop_
@@ -569,6 +733,12 @@ suite () {
     shelter_run_test_class utility test_joined_
     shelter_run_test_class utility test_to_file_
     shelter_run_test_class utility test_declared_var_
+    shelter_run_test_class utility test_declared_function_
+    shelter_run_test_class utility test_text_block_
+    shelter_run_test_class utility test_prefixed_lines_
+    shelter_run_test_class utility test_file_mtime_
+    shelter_run_test_class utility test_file_mode_
+    shelter_run_test_class utility test_file_owner_
     shelter_run_test_class automated test_bootstrap_environment_
     shelter_run_test_class automated test_supported_automated_versions_
     shelter_run_test_class automated test_target_as_ssh_arguments_

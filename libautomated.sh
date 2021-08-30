@@ -114,14 +114,23 @@ colorized () {
 text_block () {
     declare name="$1"
 
-    sed -e 1s/^/"$(sed_replacement "BEGIN ${name}")"\\n/ -e \$s/$/\\n"$(sed_replacement "END ${name}")"/
+    declare sed_replacement_begin
+    sed_replacement_begin=$(set -e; sed_replacement "BEGIN ${name}")
+
+    declare sed_replacement_end
+    sed_replacement_end=$(sed_replacement "END ${name}")
+
+    sed -u -e 1s/^/"${sed_replacement_begin}"\\n/ -e \$s/$/\\n"${sed_replacement_end}"/
 }
 
 
 prefixed_lines () {
     declare prefix="$1"
 
-    sed -e "s/^/$(sed_replacement "$prefix")/"
+    declare sed_replacement
+    sed_replacement=$(set -e; sed_replacement "$prefix")
+
+    sed -e s/^/"${sed_replacement}"/
 }
 
 
@@ -235,7 +244,11 @@ to_file () {
     restore_pipefail=$(shopt -p -o pipefail)
     set +o pipefail
 
-    mtime_before=$(file_mtime "$target_path" 2>/dev/null) || mtime_before=0
+    if [[ -e "$target_path" ]]; then
+        mtime_before=$(set -e; file_mtime "$target_path" 2>/dev/null)
+    else
+        mtime_before=0
+    fi
 
     if cmd_is_available 'diff' && cmd_is_available 'patch'; then
         diff -duaN "$target_path" - | tee >(printable_only | text_block "$1" | to_debug BRIGHT_BLACK) | patch --binary -s -p0 "$target_path"
@@ -245,7 +258,7 @@ to_file () {
         tee >(printable_only | text_block "$1" | to_debug BRIGHT_BLACK) >"$target_path"
     fi
 
-    mtime_after=$(file_mtime "$target_path")
+    mtime_after=$(set -e; file_mtime "$target_path")
 
     if [[ -n "$callback" ]] && [[ "$mtime_before" -ne "$mtime_after" ]]; then
         eval "$callback"
@@ -315,7 +328,7 @@ local_kernel () {
 file_mode () {
     declare path="$1"
 
-    case "$(local_kernel)" in
+    case "$(set -e; local_kernel)" in
         FreeBSD|OpenBSD|Darwin)
             stat -f '%#Mp%03Lp' "$path"
             ;;
@@ -332,7 +345,7 @@ file_mode () {
 file_owner () {
     declare path="$1"
 
-    case "$(local_kernel)" in
+    case "$(set -e; local_kernel)" in
         FreeBSD|OpenBSD|Darwin)
             stat -f '%Su:%Sg' "$path"
             ;;
@@ -349,7 +362,7 @@ file_owner () {
 file_mtime () {
     declare path="$1"
 
-    case "$(local_kernel)" in
+    case "$(set -e; local_kernel)" in
         FreeBSD|OpenBSD|Darwin)
             stat -f '%Um' "$path"
             ;;
@@ -394,6 +407,9 @@ run_in_tmux () {
     declare sock_file="${AUTOMATED_TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}"
     declare fifo_file="${AUTOMATED_TMUX_FIFO_PREFIX}-${AUTOMATED_OWNER_UID}"
 
+    declare fifo_file_quoted
+    fifo_file_quoted=$(set -e; quoted "$fifo_file")
+
     log_debug "Starting multiplexer and executing commands"
 
     log_debug "$command"
@@ -403,12 +419,12 @@ run_in_tmux () {
     tmux_command \
         new-session \
         -d \
-        "/usr/bin/env bash $(quoted "$fifo_file")"
+        "/usr/bin/env bash ${fifo_file_quoted}"
 
     # shellcheck disable=SC2094
     {
         cat <<EOF
-rm -f -- $(quoted "$fifo_file")
+rm -f -- ${fifo_file_quoted}
 EOF
         automated_bootstrap_environment "$AUTOMATED_CURRENT_TARGET"
 
@@ -426,7 +442,7 @@ EOF
 run_in_multiplexer () {
     declare multiplexer
 
-    if ! multiplexer=$(multiplexer_present); then
+    if ! multiplexer=$(set -e; multiplexer_present); then
         throw "Multiplexer is not available. Please install one of the following: ${AUTOMATED_SUPPORTED_MULTIPLEXERS[*]}"
     fi
 
@@ -440,7 +456,13 @@ run_in_multiplexer () {
 
 # shellcheck disable=SC2016
 interactive_multiplexer_session () {
-    run_in_multiplexer "bash -i -s -- <(automated_bootstrap_environment $(quoted "$AUTOMATED_CURRENT_TARGET")) <<< $(quoted 'source $1; exec </dev/tty')"
+    declare current_target_quoted
+    current_target_quoted=$(set -e; quoted "$AUTOMATED_CURRENT_TARGET")
+
+    declare script_quoted
+    script_quoted=$(set -e; quoted 'source $1; exec </dev/tty')
+
+    run_in_multiplexer "bash -i -s -- <(automated_bootstrap_environment ${current_target_quoted}) <<< ${script_quoted}"
 }
 
 
@@ -484,7 +506,7 @@ confirm () {
     declare answer
 
     while true; do
-        answer=$(interactive_answer "$target" "${prompt} Y/N?" "$default_value")
+        answer=$(set -e; interactive_answer "$target" "${prompt} Y/N?" "$default_value")
 
         case "$answer" in
             [yY]) return 0
@@ -520,7 +542,10 @@ target_address_only () {
     declare target="$1"
     declare username address port
 
-    eval "$(target_as_vars "$target" username address port)"
+    declare var_definitions
+    var_definitions=$(set -e; target_as_vars "$target" username address port)
+
+    eval "$var_definitions"
 
     printf '%s\n' "${address}${port:+:${port}}"
 }
@@ -531,7 +556,10 @@ target_as_ssh_arguments () {
     declare username address port
     declare -a args=()
 
-    eval "$(target_as_vars "$target" username address port)"
+    declare var_definitions
+    var_definitions=$(set -e; target_as_vars "$target" username address port)
+
+    eval "$var_definitions"
 
     if [[ -n "$port" ]]; then
         args+=(-p "$port")
@@ -570,11 +598,14 @@ file_as_code () {
     boundary="EOF-$(md5 <<< "$dst")"
 
     if [[ -f "$src" ]]; then
-        mode=$(file_mode "$src")
+        mode=$(set -e; file_mode "$src")
     fi
 
+    declare dst_quoted
+    dst_quoted=$(set -e; quoted "$dst")
+
     cat <<EOF
-base64_decode <<"${boundary}" | gzip -d >$(quoted "$dst")
+base64_decode <<"${boundary}" | gzip -d >${dst_quoted}
 EOF
 
     gzip -n -6 - <"$src" | base64_encode
@@ -585,12 +616,15 @@ EOF
 
     if [[ -f "$src" ]]; then
         cat <<EOF
-chmod ${mode} $(quoted "$dst")
+chmod ${mode} ${dst_quoted}
 EOF
     fi
 
+    declare log_message_quoted
+    log_message_quoted=$(set -e; quoted "copied ${src} to ${dst} on the target")
+
     cat <<EOF
-log_debug $(quoted "copied ${src} to ${dst} on the target")
+log_debug ${log_message_quoted}
 EOF
 }
 
@@ -611,7 +645,7 @@ file_as_function () {
     file_id_hash=$(md5 <<< "$file_id")
 
     if [[ -f "$src" ]]; then
-        mode=$(file_mode "$src")
+        mode=$(set -e; file_mode "$src")
     fi
 
     cat <<EOF
@@ -631,8 +665,11 @@ AUTOMATED_DROP_${file_id_hash^^}_MODE=${mode}
 EOF
     fi
 
+    declare log_message_quoted
+    log_message_quoted=$(set -e; quoted "shipped ${src} as the file id ${file_id}")
+
     cat <<EOF
-log_debug $(quoted "shipped ${src} as the file id ${file_id}")
+log_debug ${log_message_quoted}
 EOF
 }
 
@@ -651,7 +688,10 @@ declared_var () {
         declare -p "$var"
     )
 
-    printf 'log_debug "declared variable %s"\n' "$(quoted "$var")"
+    declare var_quoted
+    var_quoted=$(set -e; quoted "$var")
+
+    printf 'log_debug "declared variable %s"\n' "$var_quoted"
 }
 
 
@@ -659,7 +699,11 @@ declared_function () {
     declare fn="$1"
 
     declare -f "$fn"
-    printf 'log_debug "declared function %s"\n' "$(quoted "$fn")"
+
+    declare fn_quoted
+    fn_quoted=$(set -e; quoted "$fn")
+
+    printf 'log_debug "declared function %s"\n' "$fn_quoted"
 }
 
 
@@ -699,10 +743,14 @@ sourced_drop () {
 
     file_id_hash=$(md5 <<< "$file_id")
 
+    declare error_message_quoted log_message_quoted
+    error_message_quoted=$(set -e; quoted "File id ${file_id} is not dragged")
+    log_message_quoted=$(set -e; quoted "sourced file id ${file_id}")
+
     cat <<EOF
-is_function "drop_${file_id_hash}_body" || throw $(quoted "File id ${file_id} is not dragged")
+is_function "drop_${file_id_hash}_body" || throw ${error_message_quoted}
 source <(drop_${file_id_hash}_body)
-log_debug $(quoted "sourced file id ${file_id}")
+log_debug ${log_message_quoted}
 EOF
 }
 
@@ -718,7 +766,7 @@ exit_after () {
 
 
 base64_encode () {
-    if [[ "$(local_kernel)" = 'Linux' ]] && cmd_is_available base64; then
+    if [[ "$(set -e; local_kernel)" = 'Linux' ]] && cmd_is_available base64; then
         base64 -w 0
     elif cmd_is_available openssl; then
         openssl base64 -A
@@ -731,7 +779,7 @@ base64_encode () {
 
 
 base64_decode () {
-    if [[ "$(local_kernel)" = 'Linux' ]] && cmd_is_available base64; then
+    if [[ "$(set -e; local_kernel)" = 'Linux' ]] && cmd_is_available base64; then
         base64 -d
     elif cmd_is_available openssl; then
         openssl base64 -d -A
@@ -798,7 +846,10 @@ bash_minor_version_is_higher_than () {
 
 supported_automated_versions () {
     if ! semver_matches_one_of "$AUTOMATED_VERSION" "$@"; then
-        throw "Unsupported version ${AUTOMATED_VERSION} of Automated detected. Supported versions are: $(joined ', ' "$@")"
+        declare supported_versions
+        supported_versions=$(set -e; joined ', ' "$@")
+
+        throw "Unsupported version ${AUTOMATED_VERSION} of Automated detected. Supported versions are: ${supported_versions}"
     fi
 }
 
