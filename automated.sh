@@ -739,5 +739,9 @@ if ! (return 2> /dev/null); then
     # shellcheck source=libautomated.sh
     source "${AUTOMATED_LIBDIR%/}/libautomated.sh"
 
+    if ! bash_minor_version_is_higher_than 4 1; then
+        throw "Minimum supported Bash version is 4.1 (present version is ${BASH_VERSION})"
+    fi
+
     main "$@"
 fi
