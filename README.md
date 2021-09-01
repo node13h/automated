@@ -91,7 +91,7 @@ This automation framework will enable you to run commands (including locally def
 - Configuration management
 - Delivery and remote decryption of SSL certificates
 - OS updates
-- Automation of the ad hoc tasks executed on multiple systems
+- Automation of ad hoc tasks executed on multiple systems
 
 See the [cookbook directory](cookbook/) and the [ops-scripts repository](https://github.com/node13h/ops-scripts/tree/master/scripts) for some examples.
 
@@ -108,7 +108,7 @@ set -euo pipefail
 
 # This block will execute when this script is run directly, not sourced
 # or piped into an interpreter
-if [[ -n "${BASH_SOURCE[0]:-}" && "${0}" = "${BASH_SOURCE[0]}" ]]; then
+if ! (return 2> /dev/null); then
 
     # source libautomated.sh so we can use the quoted() function locally.
     source automated-config.sh
