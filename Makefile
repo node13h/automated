@@ -13,9 +13,6 @@ else
 PKG_RELEASE := 1
 endif
 
-BINTRAY_RPM_PATH := alikov/rpm/$(PROJECT)/$(PKG_VERSION)
-BINTRAY_DEB_PATH := alikov/deb/$(PROJECT)/$(PKG_VERSION)
-
 PREFIX := /usr/local
 BINDIR = $(PREFIX)/bin
 LIBDIR = $(PREFIX)/lib
@@ -29,7 +26,10 @@ SPEC_FILE := $(PROJECT).spec
 RPM_PACKAGE := bdist/noarch/$(PROJECT)-$(PKG_VERSION)-$(PKG_RELEASE).noarch.rpm
 DEB_PACKAGE := bdist/$(PROJECT)_$(VERSION)_all.deb
 
-.PHONY: install build clean test release-start release-finish uninstall release sdist rpm publish-rpm deb publish-deb publish
+CONTAINER_REGISTRY := docker.io
+CONTAINER_IMAGE := $(CONTAINER_REGISTRY)/alikov/automated
+
+.PHONY: install build clean test release-start release-finish uninstall release sdist rpm deb
 
 all: build
 
@@ -42,20 +42,19 @@ automated-config.sh: automated-config.sh.in VERSION
 	    -e 's~@VERSION@~$(VERSION)~g' automated-config.sh.in >automated-config.sh
 
 test:
-	bash test_libautomated.sh
+	bash test_automated.sh
 
 build: automated-config.sh
 
 install: build
 	install -m 0755 -d $(DESTDIR)$(BINDIR)
-	install -m 0755 -d $(DESTDIR)$(LIBDIR)/automated/facts
 	install -m 0755 -d $(DESTDIR)$(DOCSDIR)/automated
+	install -m 0755 -d $(DESTDIR)$(LIBDIR)/automated
 	install -m 0644 libautomated.sh $(DESTDIR)$(LIBDIR)/automated
 	install -m 0644 pty_helper.py $(DESTDIR)$(LIBDIR)/automated
 	install -m 0755 automated-config.sh $(DESTDIR)$(BINDIR)
 	install -m 0755 automated.sh $(DESTDIR)$(BINDIR)
 	install -m 0644 README.* $(DESTDIR)$(DOCSDIR)/automated
-	install -m 0644 facts/*.sh $(DESTDIR)$(LIBDIR)/automated/facts
 
 uninstall:
 	rm -rf -- $(DESTDIR)$(LIBDIR)/automated
@@ -117,10 +116,68 @@ $(DEB_PACKAGE): control $(SDIST_TARBALL)
 
 deb: $(DEB_PACKAGE)
 
-publish-rpm: rpm
-	jfrog bt upload --publish=true $(RPM_PACKAGE) $(BINTRAY_RPM_PATH)
+container-image:
+	podman build -t $(CONTAINER_IMAGE):$(VERSION) .
 
-publish-deb: deb
-	jfrog bt upload --publish=true --deb xenial/main/all $(DEB_PACKAGE) $(BINTRAY_DEB_PATH)
+DEPLOYMENT_ID := automated-dev
 
-publish: publish-rpm publish-deb
+STACK_MODE := container
+
+SSHD_TARGET_STATE_FILE := $(DEPLOYMENT_ID)-sshd-target.state
+SSHD_TARGET_LOCAL_PORT := 2222
+SSHD_TARGET_OS := centos7
+
+APP_ENV_STATE_FILE := $(DEPLOYMENT_ID)-app-env.state
+
+.PHONY: sshd-keys clean-sshd-keys
+
+e2e/ssh_host_%_key:
+	ssh-keygen -q -t $* -f $@ -C '' -N ''
+
+e2e/ssh_host_%_key.pub: e2e/ssh_host_%_key
+
+e2e/id_%:
+	ssh-keygen -q -t $* -f $@ -C '' -N ''
+
+e2e/id_%.pub: e2e/id_%
+
+e2e/sshd_target_testuser_password:
+	openssl rand -hex 16 >./e2e/sshd_target_testuser_password
+
+e2e/app_env_testuser_password:
+	openssl rand -hex 16 >./e2e/app_env_testuser_password
+
+sshd-keys: e2e/id_rsa e2e/ssh_host_ecdsa_key e2e/ssh_host_ed25519_key e2e/ssh_host_rsa_key ./e2e/sshd_target_testuser_password
+
+app-env-keys: e2e/app_env_testuser_password
+
+clean-sshd-keys:
+	rm -f e2e/id_rsa{,.pub} e2e/ssh_host_ecdsa_key{,.pub} e2e/ssh_host_ed25519_key{,.pub} e2e/ssh_host_rsa_key{,.pub} e2e/testuser_password
+
+clean-app-env-keys:
+	rm -f e2e/app_env_testuser_password
+
+clean: clean-sshd-keys clean-app-env-keys
+
+.PRECIOUS: $(SSHD_TARGET_STATE_FILE) $(APP_CONTAINER_STATE_FILE)
+
+$(SSHD_TARGET_STATE_FILE): sshd-keys
+	./e2e/$(STACK_MODE)-sshd-target.sh start $(SSHD_TARGET_STATE_FILE) $(DEPLOYMENT_ID) $(SSHD_TARGET_OS) ./e2e $(SSHD_TARGET_LOCAL_PORT)
+
+sshd-target: $(SSHD_TARGET_STATE_FILE)
+sshd-target-down:
+	./e2e/$(STACK_MODE)-sshd-target.sh stop $(SSHD_TARGET_STATE_FILE)
+
+
+$(APP_ENV_STATE_FILE): app-env-keys sshd-keys
+	./e2e/$(STACK_MODE)-app-env.sh start $(APP_ENV_STATE_FILE) $(DEPLOYMENT_ID) ./e2e
+
+app-env: $(APP_ENV_STATE_FILE)
+app-env-down:
+	./e2e/$(STACK_MODE)-app-env.sh stop $(APP_ENV_STATE_FILE)
+
+e2e-test:
+	set -a \
+	  && source $(APP_ENV_STATE_FILE) \
+	  && source $(SSHD_TARGET_STATE_FILE) \
+	  && ./e2e/functional.sh

@@ -18,7 +18,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 __DOC__='
-Unit-test libautomated.sh
+Unit-test automated.sh
 This script uses shelter.sh as the testing framework. Please see
 https://github.com/node13h/shelter for more information'
 
@@ -29,8 +29,13 @@ PROG_DIR=$(dirname "${BASH_SOURCE[0]:-}")
 # shellcheck disable=SC1091
 source shelter.sh
 
+export AUTOMATED_LIBDIR="${PROG_DIR%/}"
+
 # shellcheck disable=SC1090
 source "${PROG_DIR%/}/libautomated.sh"
+
+# shellcheck disable=SC1090
+source "${PROG_DIR%/}/automated.sh"
 
 test_file_as_function_file () {
     declare rc temp_file temp_file_quoted owner mode
@@ -53,15 +58,8 @@ drop_85f3735d27bcffbd74d4d5b092e52da0_body () {
 H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
 EOF-85f3735d27bcffbd74d4d5b092e52da0
 }
-
-drop_85f3735d27bcffbd74d4d5b092e52da0_mode () {
-    printf '%s\n' '${mode}'
-}
-
-drop_85f3735d27bcffbd74d4d5b092e52da0_owner () {
-    printf '%s\n' '${owner}'
-}
-msg_debug shipped\ ${temp_file_quoted}\ as\ the\ file\ id\ my-file-id
+AUTOMATED_DROP_85F3735D27BCFFBD74D4D5B092E52DA0_MODE=0600
+log_debug shipped\ ${temp_file_quoted}\ as\ the\ file\ id\ my-file-id
 EOF
     )
     rc="$?"
@@ -94,15 +92,8 @@ drop_${name_md5}_body () {
 H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
 EOF-${name_md5}
 }
-
-drop_${name_md5}_mode () {
-    printf '%s\n' '${mode}'
-}
-
-drop_${name_md5}_owner () {
-    printf '%s\n' '${owner}'
-}
-msg_debug shipped\ ${temp_file_quoted}\ as\ the\ file\ id\ ${temp_file_quoted}
+AUTOMATED_DROP_${name_md5^^}_MODE=0600
+log_debug shipped\ ${temp_file_quoted}\ as\ the\ file\ id\ ${temp_file_quoted}
 EOF
     )
     rc="$?"
@@ -114,33 +105,20 @@ EOF
 }
 
 test_file_as_function_pipe () {
-    declare owner mode
+    declare owner
 
-    {
-        owner=$(stat -c '%U:%G' '/dev/fd/0')
-        mode=$(stat -c '%#03a' '/dev/fd/0')
+    owner=$(stat -c '%U:%G' '/dev/fd/0')
 
-        assert_stdout "file_as_function /dev/fd/0 my-file-id" <(cat <<EOF
+    assert_stdout "file_as_function /dev/fd/0 my-file-id <<<'Hello World'" <(cat <<EOF
 drop_85f3735d27bcffbd74d4d5b092e52da0_body () {
     base64_decode <<"EOF-85f3735d27bcffbd74d4d5b092e52da0" | gzip -d
-H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
+H4sIAAAAAAAAA/NIzcnJVwjPL8pJ4QIA4+WVsAwAAAA=
 EOF-85f3735d27bcffbd74d4d5b092e52da0
 }
-
-drop_85f3735d27bcffbd74d4d5b092e52da0_mode () {
-    printf '%s\n' '${mode}'
-}
-
-drop_85f3735d27bcffbd74d4d5b092e52da0_owner () {
-    printf '%s\n' '${owner}'
-}
-msg_debug shipped\ /dev/fd/0\ as\ the\ file\ id\ my-file-id
+log_debug shipped\ /dev/fd/0\ as\ the\ file\ id\ my-file-id
 EOF
 )
-    } <<EOF
-Hello
-World
-EOF
+
 }
 
 test_file_as_function_dir_fail () {
@@ -151,12 +129,8 @@ test_file_as_function_dir_fail () {
     (
         set -e
 
-        temp_dir_quoted=$(printf '%q' "$temp_dir")
-
-        assert_fail "file_as_function ${temp_dir_quoted} my-file-id >/dev/null"
-        assert_stdout "file_as_function ${temp_dir_quoted} my-file-id" - <<EOF
-throw ${temp_dir_quoted}\ is\ a\ directory.\ directories\ are\ not\ supported
-EOF
+        # shellcheck disable=SC2016
+        assert_fail 'file_as_function "${temp_dir}" my-file-id 2>/dev/null'
     )
     rc="$?"
     set -e
@@ -167,10 +141,7 @@ EOF
 }
 
 test_file_as_function_unreadable () {
-    assert_fail "file_as_function /non/existing/file my-file-id >/dev/null"
-        assert_stdout "file_as_function /non/existing/file my-file-id" - <<EOF
-throw /non/existing/file\ was\ not\ readable\ at\ the\ moment\ of\ the\ shipping\ attempt
-EOF
+    assert_fail "file_as_function /non/existing/file my-file-id 2>/dev/null"
 }
 
 test_drop_stdout () {
@@ -212,13 +183,8 @@ H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
 EOF-85f3735d27bcffbd74d4d5b092e52da0
         }
 
-        drop_85f3735d27bcffbd74d4d5b092e52da0_mode () {
-            printf '%s\n' '0750'
-        }
-
-        drop_85f3735d27bcffbd74d4d5b092e52da0_owner () {
-            printf '%s\n' 'root:root'
-        }
+        # shellcheck disable=SC2034
+        AUTOMATED_DROP_85F3735D27BCFFBD74D4D5B092E52DA0_MODE=750
 
         assert_success "drop my-file-id ${dst_quoted}"
         assert_stdout "cat ${dst_quoted}" <<"EOF"
@@ -256,13 +222,11 @@ EOF
         temp_file_quoted=$(printf '%q' "$temp_file")
 
         assert_stdout "file_as_code ${temp_file_quoted} /tmp/dst" - <<EOF
-touch /tmp/dst
-chmod 0600 /tmp/dst
 base64_decode <<"EOF-d075c6918aed70a32aaebbd10eb9ecab" | gzip -d >/tmp/dst
 H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
 EOF-d075c6918aed70a32aaebbd10eb9ecab
 chmod ${mode} /tmp/dst
-msg_debug copied\ ${temp_file_quoted}\ to\ /tmp/dst\ on\ the\ target
+log_debug copied\ ${temp_file_quoted}\ to\ /tmp/dst\ on\ the\ target
 EOF
     )
     rc="$?"
@@ -276,23 +240,15 @@ EOF
 test_file_as_code_pipe () {
     declare mode
 
-    {
-        mode=$(stat -c '%#03a' '/dev/fd/0')
+    mode=$(stat -c '%#03a' '/dev/fd/0')
 
-        assert_stdout "file_as_code /dev/fd/0 /tmp/dst" <(cat <<EOF
-touch /tmp/dst
-chmod 0600 /tmp/dst
+    assert_stdout "file_as_code /dev/fd/0 /tmp/dst <<<'Hello World'" <(cat <<EOF
 base64_decode <<"EOF-d075c6918aed70a32aaebbd10eb9ecab" | gzip -d >/tmp/dst
-H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
+H4sIAAAAAAAAA/NIzcnJVwjPL8pJ4QIA4+WVsAwAAAA=
 EOF-d075c6918aed70a32aaebbd10eb9ecab
-chmod ${mode} /tmp/dst
-msg_debug copied\ /dev/fd/0\ to\ /tmp/dst\ on\ the\ target
+log_debug copied\ /dev/fd/0\ to\ /tmp/dst\ on\ the\ target
 EOF
 )
-    } <<EOF
-Hello
-World
-EOF
 }
 
 test_file_as_code_dir_fail () {
@@ -303,12 +259,8 @@ test_file_as_code_dir_fail () {
     (
         set -e
 
-        temp_dir_quoted=$(printf '%q' "$temp_dir")
-
-        assert_fail "file_as_code ${temp_dir_quoted} /tmp/dst >/dev/null"
-        assert_stdout "file_as_code ${temp_dir_quoted} /tmp/dst" - <<EOF
-throw ${temp_dir_quoted}\ is\ a\ directory.\ directories\ are\ not\ supported
-EOF
+        # shellcheck disable=SC2016
+        assert_fail 'file_as_code "${temp_dir}" /tmp/dst 2>/dev/null'
     )
     rc="$?"
     set -e
@@ -319,10 +271,7 @@ EOF
 }
 
 test_file_as_code_unreadable () {
-    assert_fail "file_as_code /non/existing/file /tmp/dst >/dev/null"
-    assert_stdout "file_as_code /non/existing/file /tmp/dst" - <<EOF
-throw /non/existing/file\ was\ not\ readable\ at\ the\ moment\ of\ the\ shipping\ attempt
-EOF
+    assert_fail "file_as_code /non/existing/file /tmp/dst 2>/dev/null"
 }
 
 test_is_function_true () {
@@ -345,19 +294,19 @@ test_sourced_drop_correct () {
     assert_stdout 'sourced_drop my-file-id' - <<"EOF"
 is_function "drop_85f3735d27bcffbd74d4d5b092e52da0_body" || throw File\ id\ my-file-id\ is\ not\ dragged
 source <(drop_85f3735d27bcffbd74d4d5b092e52da0_body)
-msg_debug sourced\ file\ id\ my-file-id
+log_debug sourced\ file\ id\ my-file-id
 EOF
 }
 
 test_bootstrap_environment_correct () {
     (
-        environment_script () {
+        automated_environment_script () {
             cat <<EOF
 echo "environment for ${1}"
 EOF
         }
 
-        assert_stdout 'source <(bootstrap_environment my-target)' - <<"EOF"
+        assert_stdout 'source <(automated_bootstrap_environment my-target)' - <<"EOF"
 environment for my-target
 EOF
     )
@@ -365,13 +314,13 @@ EOF
 
 test_bootstrap_environment_includes_environment_script () {
     (
-        environment_script () {
+        automated_environment_script () {
             cat <<EOF
 echo "environment for ${1}"
 EOF
         }
 
-        assert_stdout 'source <(bootstrap_environment my-target); environment_script' - <<"EOF"
+        assert_stdout 'source <(automated_bootstrap_environment my-target); automated_environment_script' - <<"EOF"
 environment for my-target
 echo "environment for my-target"
 EOF
@@ -459,6 +408,38 @@ address.example.com
 EOF
 }
 
+test_target_as_ssh_arguments_invalid_fail () {
+    assert_fail 'target_as_ssh_arguments ""'
+}
+
+test_target_address_only_host () {
+    assert_stdout 'target_address_only address.example.com' - <<"EOF"
+address.example.com
+EOF
+}
+
+test_target_address_only_user_host () {
+    assert_stdout 'target_address_only user@address.example.com' - <<"EOF"
+address.example.com
+EOF
+}
+
+test_target_address_only_user_host_port () {
+    assert_stdout 'target_address_only user@address.example.com:22' - <<"EOF"
+address.example.com:22
+EOF
+}
+
+test_target_address_only_host_port () {
+    assert_stdout 'target_address_only address.example.com:22' - <<"EOF"
+address.example.com:22
+EOF
+}
+
+test_target_address_only_invalid_fail () {
+    assert_fail 'target_address_only ""'
+}
+
 test_to_file_correct () {
     declare rc temp_dir
 
@@ -501,13 +482,13 @@ test_to_file_callback () {
         set -e
 
         callback_fn () {
-            echo 'Callback!'
+            printf 'Callback %s!\n' "$1"
         }
 
         temp_dir_quoted=$(printf '%q' "$temp_dir")
 
-        assert_stdout "echo 'Hello World' | to_file ${temp_dir_quoted%/}/test.txt callback_fn" - <<"EOF"
-Callback!
+        assert_stdout "echo 'Hello World' | to_file ${temp_dir_quoted%/}/test.txt 'callback_fn \"with arguments\"'" - <<"EOF"
+Callback with arguments!
 EOF
         assert_stdout "cat ${temp_dir_quoted%/}/test.txt" - <<< 'Hello World'
     )
@@ -523,10 +504,6 @@ EOF
 test_to_file_no_patch_correct () {
     declare rc temp_dir
 
-    # Ensure the test environment has the patch command.
-    # For more information see the to_file() source
-    assert_success 'command -v patch >/dev/null' 'Please install the patch command'
-
     temp_dir=$(mktemp -d)
 
     set +e
@@ -540,11 +517,9 @@ test_to_file_no_patch_correct () {
 
         patch_command 'function' 'cmd_is_available' 'cmd_is_available_mock "$@"'
 
-        temp_dir_quoted=$(printf '%q' "$temp_dir")
-
         echo 'Hello World' | to_file "${temp_dir%/}/test.txt"
 
-        assert_stdout "cat ${temp_dir_quoted%/}/test.txt" - <<< 'Hello World'
+        assert_stdout 'cat ${temp_dir%/}/test.txt' - <<< 'Hello World'
         unpatch_command 'cmd_is_available'
     )
     rc="$?"
@@ -556,6 +531,198 @@ test_to_file_no_patch_correct () {
     return "$rc"
 }
 
+test_to_file_fail () {
+    declare rc temp_dir
+
+    temp_dir=$(mktemp -d)
+
+    set +e
+    (
+        set -e
+
+        # shellcheck disable=SC2016
+        assert_fail 'to_file "${temp_dir%/}/test.txt" <&- 2>/dev/null'
+    )
+    rc="$?"
+    set -e
+
+    rm -f -- "${temp_dir%/}/test.txt"
+    rmdir -- "$temp_dir"
+
+    return "$rc"
+}
+
+test_declared_var_not_set_fail () {
+    assert_fail 'declared_var THIS_VARIABLE_DOES_NOT_EXIST 2>/dev/null'
+}
+
+test_declared_var_string () {
+    declare FOO=bar
+
+    assert_stdout 'declared_var FOO' - <<EOF
+declare -- FOO="bar"
+log_debug "declared variable FOO"
+EOF
+}
+
+test_declared_var_array () {
+    # shellcheck disable=SC2034
+    declare -a FOO=(bar baz)
+
+    assert_stdout 'declared_var FOO' - <<EOF
+declare -a FOO=([0]="bar" [1]="baz")
+log_debug "declared variable FOO"
+EOF
+}
+
+test_declared_var_inline () {
+    assert_stdout 'declared_var FOO bar' - <<EOF
+declare -- FOO="bar"
+log_debug "declared variable FOO"
+EOF
+}
+
+test_declared_function_correct () {
+    (
+        set -e
+
+        my_foo_function () {
+            echo "Hello World"
+        }
+
+        assert_stdout 'declared_function my_foo_function' - <<"EOF"
+my_foo_function () 
+{ 
+    echo "Hello World"
+}
+log_debug "declared function my_foo_function"
+EOF
+    )
+}
+
+test_declared_function_not_defined_fail () {
+    assert_fail 'declared_function THIS_FUNCTION_DOES_NOT_EXIST 2>/dev/null'
+}
+
+test_text_block_correct () {
+    assert_stdout 'echo "Hello World" | text_block Foo' - <<"EOF"
+BEGIN Foo
+Hello World
+END Foo
+EOF
+}
+
+test_text_block_empty () {
+    assert_stdout 'true | text_block Foo' - <<"EOF"
+EOF
+}
+
+test_text_block_fail () {
+    assert_fail 'text_block Foo <&- 2>/dev/null'
+}
+
+test_prefixed_lines_correct () {
+    assert_stdout 'printf "%s\n%s\n" "Hello" "World" | prefixed_lines "The Prefix"' - <<"EOF"
+The PrefixHello
+The PrefixWorld
+EOF
+}
+
+test_prefixed_lines_empty () {
+    assert_stdout 'true | prefixed_lines Prefix' - <<"EOF"
+EOF
+}
+
+test_prefixed_lines_fail () {
+    assert_fail 'prefixed_lines Prefix <&- 2>/dev/null'
+}
+
+test_file_mtime_correct () {
+    declare rc temp_dir
+
+    temp_dir=$(mktemp -d)
+
+    set +e
+    (
+        set -e
+
+        touch "${temp_dir%/}/test.txt"
+
+        declare actual_mtime
+        actual_mtime=$(stat -c "%Y" "${temp_dir%/}/test.txt")
+        # shellcheck disable=SC2016
+        assert_stdout 'file_mtime ${temp_dir%/}/test.txt' - <<< "$actual_mtime"
+    )
+    rc="$?"
+    set -e
+
+    rm -f -- "${temp_dir%/}/test.txt"
+    rmdir -- "$temp_dir"
+
+    return "$rc"
+}
+
+test_file_mtime_fail () {
+    assert_fail 'file_mtime /THIS/FILE/DOES/NOT/EXIST 2>/dev/null'
+}
+
+test_file_mode_correct () {
+    declare rc temp_dir
+
+    temp_dir=$(mktemp -d)
+
+    set +e
+    (
+        set -e
+
+        touch "${temp_dir%/}/test.txt"
+        chmod 0750 "${temp_dir%/}/test.txt"
+
+        # shellcheck disable=SC2016
+        assert_stdout 'file_mode ${temp_dir%/}/test.txt' - <<< "0750"
+    )
+    rc="$?"
+    set -e
+
+    rm -f -- "${temp_dir%/}/test.txt"
+    rmdir -- "$temp_dir"
+
+    return "$rc"
+}
+
+test_file_mode_fail () {
+    assert_fail 'file_mode /THIS/FILE/DOES/NOT/EXIST 2>/dev/null'
+}
+
+test_file_owner_correct () {
+    declare rc temp_dir
+
+    temp_dir=$(mktemp -d)
+
+    set +e
+    (
+        set -e
+
+        touch "${temp_dir%/}/test.txt"
+
+        declare actual_owner
+        actual_owner=$(stat -c "%U:%G" "${temp_dir%/}/test.txt")
+        # shellcheck disable=SC2016
+        assert_stdout 'file_owner ${temp_dir%/}/test.txt' - <<< "$actual_owner"
+    )
+    rc="$?"
+    set -e
+
+    rm -f -- "${temp_dir%/}/test.txt"
+    rmdir -- "$temp_dir"
+
+    return "$rc"
+}
+
+test_file_owner_fail () {
+    assert_fail 'file_owner /THIS/FILE/DOES/NOT/EXIST 2>/dev/null'
+}
+
 suite () {
     shelter_run_test_class upload test_file_as_function_
     shelter_run_test_class upload test_drop_
@@ -565,9 +732,17 @@ suite () {
     shelter_run_test_class utility test_semver_matches_one_of_
     shelter_run_test_class utility test_joined_
     shelter_run_test_class utility test_to_file_
+    shelter_run_test_class utility test_declared_var_
+    shelter_run_test_class utility test_declared_function_
+    shelter_run_test_class utility test_text_block_
+    shelter_run_test_class utility test_prefixed_lines_
+    shelter_run_test_class utility test_file_mtime_
+    shelter_run_test_class utility test_file_mode_
+    shelter_run_test_class utility test_file_owner_
     shelter_run_test_class automated test_bootstrap_environment_
     shelter_run_test_class automated test_supported_automated_versions_
     shelter_run_test_class automated test_target_as_ssh_arguments_
+    shelter_run_test_class automated test_target_address_only_
 }
 
 usage () {
@@ -593,7 +768,7 @@ main () {
 
     if [[ -n "${ENABLE_CI_MODE:-}" ]]; then
         mkdir -p junit
-        shelter_run_test_suite suite | shelter_junit_formatter >junit/test_libautomated.xml
+        shelter_run_test_suite suite | shelter_junit_formatter >junit/test_automated.xml
     else
         shelter_run_test_suite suite | shelter_human_formatter
     fi

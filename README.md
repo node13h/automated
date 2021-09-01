@@ -59,13 +59,6 @@ This automation framework will enable you to run commands (including locally def
   ```
   Take a look at the [OS script from the ops-scripts repository](https://github.com/node13h/ops-scripts/blob/master/scripts/OS) for an extended version of this example.
 
-- **Fact support**
-
-  Some facts about the target systems are available via FACT\_\* variables. Take a look at built-in facts:
-
-  ```bash
-  automated.sh -c 'set | grep ^FACT_' target.example.com
-  ```
 
 - **File upload support**
 
@@ -150,10 +143,10 @@ Any *NIX system with Bash version 4 or later should work. SUDO PTY handling and 
 
 The following systems were confirmed to work both as controlling workstation and remote targets
 
-- CentOS 7
-- Ubuntu 16.04
+- CentOS 7+
+- Ubuntu 16.04+
 - Fedora
-- FreeBSD 11
+- FreeBSD 11+
 
 
 ## Installing
@@ -164,36 +157,24 @@ The following systems were confirmed to work both as controlling workstation and
 sudo make install
 ```
 
-### Packages for RedHat-based systems
-
-```bash
-cat <<"EOF" | sudo tee /etc/yum.repos.d/alikov.repo
-[alikov]
-name=alikov
-baseurl=https://dl.bintray.com/alikov/rpm
-gpgcheck=0
-repo_gpgcheck=1
-gpgkey=https://bintray.com/user/downloadSubjectPublicKey?username=bintray
-enabled=1
-EOF
-
-sudo yum install automated
-```
-
-### Packages for Debian-based systems
-
-```bash
-curl 'https://bintray.com/user/downloadSubjectPublicKey?username=bintray' | sudo apt-key add -
-
-cat <<"EOF" | sudo tee /etc/apt/sources.list.d/alikov.list
-deb https://dl.bintray.com/alikov/deb xenial main
-EOF
-
-sudo apt-get update && sudo apt-get install automated
-```
-
 ## Testing
 
+### Unit-tests
+
+Run `make test`.
+
+
+### End-to-end tests
+
+Prerequisites:
+- Podman
+
+First, run `make images` in the `e2e` directory to build SSHD target images and access keys locally. See `e2e/Makefile` for a list of image tags produced.
+Now you can run `make SSHD_TARGET_IMAGE=<image:tag> sshd-target app-container` to bring a container running SSHD and a container with `automated.sh` pre-installed up. Execute `make e2e-test` to run functional tests against he currently running SSHD target container.
+To bring containers down, run `make app-container-down sshd-target-down`.
+
+
+### Vagrant
 `vagrant up` will bring Fedora, CentOS, Ubuntu and FreeBSD VMs with the pre-installed automated.sh and the pre-configured user account `user`. The password for this user is `secret`. Every machine will allow passwordless SSH pubkey-based login and SUDO using this user account.
 
 Example:

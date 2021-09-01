@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (C) 2016-2018 Sergej Alikov <sergej.alikov@gmail.com>
+# Copyright (C) 2016-2021 Sergej Alikov <sergej.alikov@gmail.com>
 
 # This file is part of Automated.
 
@@ -19,35 +19,89 @@
 
 set -euo pipefail
 
-AUTOMATED_PROG=$(basename "${BASH_SOURCE[0]:-}")
-AUTOMATED_PROG_DIR=$(dirname "${BASH_SOURCE[0]:-}")
+AUTOMATED_EXECUTE_LOCALLY="${AUTOMATED_EXECUTE_LOCALLY:-FALSE}"
+AUTOMATED_AUTO_ATTACH="${AUTOMATED_AUTO_ATTACH:-TRUE}"
+AUTOMATED_IGNORE_FAILED="${AUTOMATED_IGNORE_FAILED:-FALSE}"
+AUTOMATED_DUMP_SCRIPT="${AUTOMATED_DUMP_SCRIPT:-FALSE}"
+AUTOMATED_PREFIX_TARGET_OUTPUT="${AUTOMATED_PREFIX_TARGET_OUTPUT:-FALSE}"
+AUTOMATED_PASS_STDIN="${AUTOMATED_PASS_STDIN:-FALSE}"
+AUTOMATED_CALL_CMD="${AUTOMATED_CALL_CMD:-main}"
+AUTOMATED_SSH_CMD="${AUTOMATED_SSH_CMD:-ssh}"
+AUTOMATED_SUDO_ENABLE="${AUTOMATED_SUDO_ENABLE:-FALSE}"
+AUTOMATED_SUDO_PASSWORDLESS="${AUTOMATED_SUDO_PASSWORDLESS:-FALSE}"
+AUTOMATED_SUDO_PASSWORD_ON_STDIN="${AUTOMATED_SUDO_PASSWORD_ON_STDIN:-FALSE}"
+AUTOMATED_SUDO_ASK_PASSWORD_CMD="${AUTOMATED_SUDO_ASK_PASSWORD_CMD:-ask_sudo_password}"
+AUTOMATED_FUNCTRACE_DEPTH="${AUTOMATED_FUNCTRACE_DEPTH:-2}"
 
-# shellcheck source=automated-config.sh
-source "${AUTOMATED_PROG_DIR%/}/automated-config.sh"
-# shellcheck source=libautomated.sh
-source "${AUTOMATED_LIBDIR%/}/libautomated.sh"
+declare -a EXPORT_VARS=()
+declare -a EXPORT_FUNCTIONS=()
+declare -a LOAD_PATHS=()
+declare -a COPY_PAIRS=()
+declare -a DRAG_PAIRS=()
+declare -a MACROS=()
+declare -a TARGETS=()
 
-# TODO Throw error on unsupported systems (CentOS5, perhaps Ubuntu 10.04)
+SUDO_UID_VARIABLE='AUTOMATED_SUDO_UID'
 
-FACTDIR="${AUTOMATED_LIBDIR%/}/facts"
+EXIT_TIMEOUT=65
+EXIT_SUDO_PASSWORD_NOT_ACCEPTED=66
+EXIT_SUDO_PASSWORD_REQUIRED=67
 
-LOCAL=FALSE
-AUTO_ATTACH=TRUE
-IGNORE_FAILED=FALSE
-DUMP_SCRIPT=FALSE
-AUTOLOAD_FACTS=TRUE
-PREFIX_TARGET_OUTPUT=FALSE
-PASS_STDIN=FALSE
 
-CMD='main'
+ssh_command () {
+    declare command_quoted
+    command_quoted=$(set -e; quoted "$@")
 
-EXPORT_VARS=()
-EXPORT_FUNCTIONS=()
-LOAD_PATHS=()
-COPY_PAIRS=()
-DRAG_PAIRS=()
-MACROS=()
-TARGETS=()
+    eval "${AUTOMATED_SSH_CMD} ${command_quoted}"
+}
+
+
+# This command is usually run on the controlling workstation, not remote
+attach_to_multiplexer () {
+    declare multiplexer="$1"
+    declare target="${2:-LOCAL HOST}"
+
+    declare -a handler
+    declare command
+
+    declare -a ssh_args
+
+    if is_true "$AUTOMATED_EXECUTE_LOCALLY"; then
+        handler=(eval)
+    else
+        mapfile -t ssh_args < <(target_as_ssh_arguments "$target")
+        handler=('ssh_command' '-t' '-q' "${ssh_args[@]}" '--')
+    fi
+
+    case "$multiplexer" in
+        tmux)
+            declare socket_quoted
+            socket_quoted=$(set -e; quoted "$AUTOMATED_TMUX_SOCK_PREFIX")
+
+            # shellcheck disable=SC2016
+            command="tmux -S ${socket_quoted}-\"\$(id -u)\" attach"
+            ;;
+    esac
+
+    log_debug "Attaching via ${handler[*]}" BRIGHT_BLUE
+    log_debug "Attach command: ${command}"
+
+    "${handler[@]}" "$command"
+}
+
+
+ask_sudo_password () {
+    declare sudo_password
+
+    if is_true "$AUTOMATED_SUDO_PASSWORD_ON_STDIN"; then
+        read -r sudo_password
+    else
+        sudo_password=$(set -e; interactive_secret "${1:-localhost}" "SUDO password")
+    fi
+
+    printf '%s\n' "$sudo_password"
+}
+
 
 usage () {
     cat <<EOF
@@ -58,33 +112,46 @@ Runs commands on local host or one or more remote targets.
 TARGET
 
   Target is an address of the host you want to run the code on. It may
-  include the username and the port number (user@example.com:22 for example).
+  include a username and a port number (user@example.com:22 for example).
   Target can be specified multiple times.
 
 
 OPTIONS:
 
   -s, --sudo                  Use SUDO to do the calls
+                              Default: ${AUTOMATED_SUDO_ENABLE}
+                              Env: AUTOMATED_SUDO_ENABLE
   --sudo-passwordless         Don't ask for SUDO password. Will ask anyway if
                               target insists.
+                              Default: ${AUTOMATED_SUDO_PASSWORDLESS}
+                              Env: AUTOMATED_SUDO_PASSWORDLESS
   --sudo-password-on-stdin    Read SUDO password from STDIN
+                              Default: ${AUTOMATED_SUDO_PASSWORD_ON_STDIN}
+                              Env: AUTOMATED_SUDO_PASSWORD_ON_STDIN
   --sudo-ask-password-cmd CMD Set command to use to ask user for SUDO password
                               The command will receive the current target as the
                               first argument.
-                              Defaults to the built-in ask_sudo_password command.
-                              Current value: ${SUDO_ASK_PASSWORD_CMD}
-  -c, --call COMMAND          Command to call. Default is "${CMD}"
+                              Default: ${AUTOMATED_SUDO_ASK_PASSWORD_CMD}
+                              Env: AUTOMATED_SUDO_ASK_PASSWORD_CMD
+  -c, --call COMMAND          Command to call
+                              Default: ${AUTOMATED_CALL_CMD}
+                              Env: AUTOMATED_CALL_CMD
   -i, --inventory FILE        Load list of targets from the FILE
-  -e, --export NAME           Make NAME from local environment available on the
-                              remote side. NAME can be either variable or
-                              function name. Functions have to be exported with
-                              the 'export -f NAME' first (bash-specific).
-                              May be specified multiple times
+  -e, --export VARIABLE[=VALUE]
+                              Make VARIABLE from the local environment available
+                              on the remote side.
+                              May be specified multiple times.
+  --export-fn FUNCTION        Make FUNCTION from the local environment available
+                              on the remote side. Functions have to be exported
+                              with 'export -f FUNCTION' first (bash-specific).
+                              May be specified multiple times.
   -l, --load PATH             Load file at specified PATH before calling
                               the command; in case PATH is a directory -
                               load *.sh from it. Can be specified multiple times.
   --stdin                     Pass the STDIN of this script to the remote
-                              command. Disabled by default.
+                              command.
+                              Default: ${AUTOMATED_PASS_STDIN}
+                              Env: AUTOMATED_PASS_STDIN
   --cp LOCAL-SRC-FILE REMOTE-DST-FILE
                               Copy local file to the target(s).
                               Can be specified multiple times.
@@ -93,7 +160,7 @@ OPTIONS:
                               Pairs should be separated by spaces, one pair per
                               line. First goes the local source file path,
                               second - the remote destination file path.
-                              Use the backslashes to escape the spaces and/or
+                              Use backslashes to escape spaces and/or
                               special characters.
                               Can be specified multiple times.
   --drag LOCAL-SRC-FILE FILE-ID
@@ -105,11 +172,11 @@ OPTIONS:
                               function in the script.
                               Allows for the destination path calculation at
                               runtime on the remote side.
-                              WARNING: This method is not suitable for the large
+                              WARNING: This method is not suitable for large
                               files as the contents will be kept in memory
                               during the execution of the script.
                               Can be specified multiple times.
-  --drag-list FILE            Similar to the --cp-list, but will not write files
+  --drag-list FILE            Similar to --cp-list, but will not write files
                               to the remote system until the drop function is
                               used (see --drag). First goes the local source
                               file path, second - the file id. One pair per line.
@@ -117,143 +184,184 @@ OPTIONS:
                               the EXPRESSION will be remotely executed by the
                               current target (current target is stored in
                               the \$target variable).
-                              Use this to dynamically produce the target-
-                              specific scripts.
+                              Use this to dynamically produce target-specific
+                              scripts.
                               Can be specified multiple times.
   -h, --help                  Display help text and exit
   --version                   Output version and exit
   -v, --verbose               Enable verbose output
-  --local                     Do the local call only. Any remote targets will
+  --functrace-depth LEVEL     Set function trace call stack depth displayed in
+                              verbose output
+                              Default: ${AUTOMATED_FUNCTRACE_DEPTH}
+                              Env: AUTOMATED_FUNCTRACE_DEPTH
+  --local                     Do the call locally. Any remote targets will
                               be ignored.
-  --dont-attach               When running a command in the terminal
+                              Default: ${AUTOMATED_EXECUTE_LOCALLY}
+                              Env: AUTOMATED_EXECUTE_LOCALLY
+  --dont-attach               Disable auto-attach to multiplexer.
+                              When running a command in a terminal
                               multiplexer - proceed to the next host immediately
                               without attaching to the multiplexer.
+                              Default (do attach): ${AUTOMATED_AUTO_ATTACH}
+                              Env: AUTOMATED_AUTO_ATTACH
   --ignore-failed             If one of the targets has failed - proceed to the
                               next one. Exit codes will be lost.
+                              Default: ${AUTOMATED_IGNORE_FAILED}
+                              Env: AUTOMATED_IGNORE_FAILED
   --dump-script               Output compiled script to STDOUT. Do not run
-                              anything. Implies the local operation.
+                              anything. Implies local operation.
+                              Default: ${AUTOMATED_DUMP_SCRIPT}
+                              Env: AUTOMATED_DUMP_SCRIPT
   --tmux-sock-prefix PATH     Use custom PATH prefix for tmux socket on the
                               target.
-                              Default: ${TMUX_SOCK_PREFIX}
+                              Default: ${AUTOMATED_TMUX_SOCK_PREFIX}
+                              Env: AUTOMATED_TMUX_SOCK_PREFIX
   --tmux-fifo-prefix PATH     Use custom PATH prefix for the FIFO object to use
                               for communicating with tmux.
-                              Default: ${TMUX_FIFO_PREFIX}
-                              target.
-                              Default: ${TMUX_SOCK_PREFIX}
-  --no-autoload-facts         Disable autoloading of the ${FACTDIR%/}/*.sh
+                              Default: ${AUTOMATED_TMUX_FIFO_PREFIX}
+                              Env: AUTOMATED_TMUX_FIFO_PREFIX
   --prefix-target-output      Prefix all output from every target with
-                              a "TARGET: "
+                              "TARGET: "
+                              Default ${AUTOMATED_PREFIX_TARGET_OUTPUT}
+                              Env: AUTOMATED_PREFIX_TARGET_OUTPUT
   --ssh-command               Set the ssh client command. One of the use cases
                               is wrapping the ssh command in sshpass.
                               Will be eval'd.
-                              Default: ${SSH_COMMAND}
+                              Default: ${AUTOMATED_SSH_CMD}
+                              Env: AUTOMATED_SSH_CMD
 
 EOF
 }
 
 
-environment_script () {
+automated_environment_script () {
     # shellcheck disable=SC2034
-    local CURRENT_TARGET="${1}"
+    declare AUTOMATED_CURRENT_TARGET="$1"
 
-    local var fn pair paths macro path file_path
+    declare var fn pair macro path file_path
 
-    # OWNER_UID_SOURCE is not quoted intentionally!
+    declare -a paths=()
+
     cat <<EOF
 #!/usr/bin/env bash
 
 set -euo pipefail
 
-AUTOMATED_OWNER_UID=${OWNER_UID_SOURCE}
+AUTOMATED_OWNER_UID="\${${SUDO_UID_VARIABLE}:-\$(id -u)}"
 EOF
     file_as_function "${AUTOMATED_LIBDIR%/}/libautomated.sh" \
                      '__automated_libautomated'
     sourced_drop '__automated_libautomated'
 
-    declared_var DEBUG
-    declared_var CURRENT_TARGET
-    declared_var TMUX_SOCK_PREFIX
+    declared_var AUTOMATED_DEBUG
+    declared_var AUTOMATED_CURRENT_TARGET
+    declared_var AUTOMATED_TMUX_SOCK_PREFIX
     declared_var AUTOMATED_VERSION
+    declared_var AUTOMATED_FUNCTRACE_DEPTH
 
     if [[ "${#EXPORT_VARS[@]}" -gt 0 ]]; then
         for var in "${EXPORT_VARS[@]}"; do
-            declared_var "${var}"
+            (
+                set -e
+
+                if [[ "$var" == *=* ]]; then
+                    declare key value
+
+                    key="${var%%=*}"
+                    value="${var#*=}"
+
+                    declared_var "$key" "$value"
+                else
+                    declared_var "$var"
+                fi
+            )
         done
     fi
 
     if [[ "${#EXPORT_FUNCTIONS[@]}" -gt 0 ]]; then
         for fn in "${EXPORT_FUNCTIONS[@]}"; do
-            declared_function "${fn}"
+            declared_function "$fn"
         done
     fi
 
     if [[ "${#DRAG_PAIRS[@]}" -gt 0 ]]; then
         for pair in "${DRAG_PAIRS[@]}"; do
             # shellcheck disable=SC2086
-            file_as_function ${pair}
+            eval "file_as_function ${pair}"
         done
     fi
 
-    if is_true "${AUTOLOAD_FACTS}"; then
-        paths+=("${FACTDIR}")
-    fi
-
     if [[ "${#LOAD_PATHS[@]}" -gt 0 ]]; then
-        paths+=("${LOAD_PATHS[@]}")
+        for path in "${LOAD_PATHS[@]}"; do
+            if [[ -d "$path" ]]; then
+                for file_path in "${path%/}/"*.sh; do
+                    paths+=("$file_path")
+                done
+            else
+                paths+=("$path")
+            fi
+        done
     fi
 
     if [[ "${#paths[@]}" -gt 0 ]]; then
         for path in "${paths[@]}"; do
-            if [[ -d "${path}" ]]; then
-                for file_path in "${path%/}/"*.sh; do
-                    file_as_function "${file_path}"
-                    sourced_drop "${file_path}"
-                done
-            else
-                file_as_function "${path}"
-                sourced_drop "${path}"
-            fi
+            file_as_function "$path"
+            sourced_drop "$path"
         done
     fi
 
     if [[ "${#MACROS[@]}" -gt 0 ]]; then
         for macro in "${MACROS[@]}"; do
-            eval "${macro}"
+            eval "$macro"
         done
     fi
 }
 
-rendered_script () {
-    local target="${1}"
-    local command="${2}"
 
-    local pair
+rendered_script () {
+    declare target="$1"
+    declare command="$2"
+
+    declare pair
 
     # sudo password has to go first!
-    if is_true "${SUDO}"; then
-        if is_true "${DUMP_SCRIPT}"; then
+    if is_true "$AUTOMATED_SUDO_ENABLE"; then
+        if is_true "$AUTOMATED_DUMP_SCRIPT"; then
             printf '%s\n' '*** SUDO PASSWORD IS HIDDEN IN SCRIPT DUMP MODE ***'
         else
-            printf '%s\n' "${sudo_password}"  # This one will be consumed by the PTY helper
+            printf '%s\n' "$sudo_password"  # This one will be consumed by the PTY helper
         fi
     fi
 
-    bootstrap_environment "${target}"
+    automated_bootstrap_environment "$target"
 
     if [[ "${#COPY_PAIRS[@]}" -gt 0 ]]; then
         for pair in "${COPY_PAIRS[@]}"; do
             # shellcheck disable=SC2086
-            file_as_code ${pair}
+            eval "file_as_code ${pair}"
         done
     fi
 
+    cat <<"EOF"
+if is_true "${AUTOMATED_DEBUG}"; then
+  set -o functrace
+  trap 'log_cmd_trap' DEBUG
+fi
+
+EOF
+
     # This block has to be the last block in the script as it
     # joins the STDIN of this script to the STDIN of the executed command
-    if is_true "${PASS_STDIN}"; then
+    if is_true "$AUTOMATED_PASS_STDIN"; then
         cat <<EOF
 {
     ${command}
-    msg_debug 'done'
+
+    log_debug 'done'
+
+    if is_true "${AUTOMATED_DEBUG}"; then
+      trap - DEBUG
+    fi
 
     # exit() is required so we don't try to execute the STDIN in case
     # no one has consumed it.
@@ -267,54 +375,98 @@ EOF
         cat <<EOF
 {
     ${command}
-    msg_debug 'done'
+
+    log_debug 'done'
+
+    if is_true "${AUTOMATED_DEBUG}"; then
+      trap - DEBUG
+    fi
 }
 EOF
     fi
 }
 
 
+handler_command () {
+    declare force_sudo_password="$1"
+    declare -a handler=()
+
+    declare -a command_environment=()
+
+    declare packaged_pty_helper_script pty_helper_command
+
+    if is_true "$AUTOMATED_DUMP_SCRIPT"; then
+        handler=(cat)
+    else
+        if is_true "$AUTOMATED_EXECUTE_LOCALLY"; then
+            handler=(eval)
+        else
+            mapfile -t ssh_args < <(target_as_ssh_arguments "$target")
+            handler=('ssh_command' '-q' "${ssh_args[@]}" '--')
+        fi
+
+        if is_true "$AUTOMATED_SUDO_ENABLE"; then
+            declare var var_value_quoted
+            for var in SUDO_UID_VARIABLE EXIT_TIMEOUT EXIT_SUDO_PASSWORD_NOT_ACCEPTED EXIT_SUDO_PASSWORD_REQUIRED; do
+                var_value_quoted=$(set -e; quoted "${!var}")
+                command_environment+=("${var}=${var_value_quoted}")
+            done
+
+            packaged_pty_helper_script=$(gzip <"${AUTOMATED_LIBDIR%/}/pty_helper.py" | base64_encode)
+            # shellcheck disable=SC2016
+            pty_helper_command=('"$PYTHON_INTERPRETER"' "<(\"\$PYTHON_INTERPRETER\" -m base64 -d <<< ${packaged_pty_helper_script} | gunzip)")
+
+            if ! is_true "$force_sudo_password" && is_true "$AUTOMATED_SUDO_PASSWORDLESS"; then
+                pty_helper_command+=("--sudo-passwordless")
+            fi
+
+            pty_helper_command+=(bash)
+
+            declare command_quoted
+            command_quoted=$(set -e; quoted "PYTHON_INTERPRETER=\$(command -v python3 || command -v python2) && ${command_environment[*]} exec ${pty_helper_command[*]}")
+
+            handler+=("bash --norc -euc ${command_quoted}")
+
+        else
+            handler+=(bash)
+        fi
+    fi
+
+    declare handler_commandline_quoted
+    handler_commandline_quoted=$(set -e; quoted "${handler[@]}")
+
+    log_debug "Executing via ${handler_commandline_quoted}" BRIGHT_BLUE
+
+    "${handler[@]}"
+}
+
+
 execute () {
-    local command="${1}"
-    local target="${2:-LOCAL HOST}"
+    declare command="$1"
+    declare target="${2:-LOCAL HOST}"
 
-    local sudo_password
-    local force_sudo_password=FALSE
+    declare sudo_password
+    declare force_sudo_password=FALSE
 
-    local handler rc do_attach multiplexer
-    local -a output_processor
-
-    local -a ssh_args
+    declare handler rc do_attach multiplexer
+    declare -a output_processor
 
     # Loop until SUDO password is accepted
     while true; do
-
-        if is_true "${DUMP_SCRIPT}"; then
-            handler=(cat)
-        else
-            if is_true "${LOCAL}"; then
-                handler=(eval)
-            else
-                mapfile -t ssh_args < <(target_as_ssh_arguments "${target}")
-                handler=("${SSH_COMMAND}" '-q' "$(quoted "${ssh_args[@]}")" '--')
-            fi
-
-            handler+=("$(quoted "$(in_proper_context bash "${force_sudo_password}")")")
-        fi
 
         sudo_password=''
 
         rc=0
 
-        if is_true "${SUDO}"; then
-            if is_true "${force_sudo_password}" || ! is_true "${SUDO_PASSWORDLESS}"; then
-                sudo_password=$("${SUDO_ASK_PASSWORD_CMD}" "${target}")
+        if is_true "$AUTOMATED_SUDO_ENABLE"; then
+            if is_true "$force_sudo_password" || ! is_true "$AUTOMATED_SUDO_PASSWORDLESS"; then
+                sudo_password=$(set -e; "$AUTOMATED_SUDO_ASK_PASSWORD_CMD" "$target")
             fi
         fi
 
-        msg_debug "Executing on ${target}"
+        log_debug "Executing on ${target}"
 
-        if is_true "${PREFIX_TARGET_OUTPUT}"; then
+        if is_true "$AUTOMATED_PREFIX_TARGET_OUTPUT"; then
             output_processor=(prefixed_lines "${target}: ")
         else
             output_processor=(cat)
@@ -323,24 +475,34 @@ execute () {
         set +e
         (
             set -e
-            msg_debug "Executing via ${handler[*]}" "${ANSI_FG_BRIGHT_BLUE}"
-            eval "${handler[@]}" > >("${output_processor[@]}") 2> >("${output_processor[@]}" >&2) < <(rendered_script "${target}" "${command}")
+
+            # coproc is necessary to catch an error exit code from the process
+            # substitution. The RENDERED_SCRIPT_STDIN FD is used to connect main
+            # process STDIN to coproc STDIN to enable the --stdin feature.
+            declare cpid
+            { coproc rendered_script "$target" "$command" <&"$RENDERED_SCRIPT_STDIN"; } {RENDERED_SCRIPT_STDIN}<&0
+
+            cpid="$COPROC_PID"
+
+            handler_command "$force_sudo_password" > >("${output_processor[@]}") 2> >("${output_processor[@]}" >&2) < <(cat <&"${COPROC[0]}")
+
+            wait "$cpid"
         )
         rc="$?"
         set -e
 
-        case "${rc}" in
-            "${EXIT_SUDO_PASSWORD_NOT_ACCEPTED}")
-                if is_true "${SUDO_PASSWORD_ON_STDIN}"; then
-                    msg_debug "SUDO password was provided on STDIN, but rejected by the target. Can't prompt, giving up"
+        case "$rc" in
+            "$EXIT_SUDO_PASSWORD_NOT_ACCEPTED")
+                if is_true "$AUTOMATED_SUDO_PASSWORD_ON_STDIN"; then
+                    log_debug "SUDO password was provided on STDIN, but rejected by the target. Can't prompt, giving up"
                     break
                 else
-                    msg_debug 'SUDO password was rejected. Looping over'
+                    log_debug 'SUDO password was rejected. Looping over'
                 fi
                 ;;
 
-            "${EXIT_SUDO_PASSWORD_REQUIRED}")
-                msg_debug "${target} requested the password for SUDO, disabling passwordless SUDO mode for this target and looping over."
+            "$EXIT_SUDO_PASSWORD_REQUIRED")
+                log_debug "${target} requested the password for SUDO, disabling passwordless SUDO mode for this target and looping over."
                 force_sudo_password=TRUE
                 ;;
             *)
@@ -350,232 +512,215 @@ execute () {
 
     done
 
-    case "${rc}" in
-        "${EXIT_TIMEOUT}")
-            msg "Timeout while connecting to ${target}"
+    case "$rc" in
+        "$EXIT_TIMEOUT")
+            throw "Timeout while connecting to ${target}"
             ;;
 
-        "${EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX}")
-            msg "Terminal multiplexer appears to be already running. Attaching ..."
+        "$AUTOMATED_EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX")
+            log_info "Terminal multiplexer appears to be already running. Attaching ..."
             do_attach=TRUE
             multiplexer='tmux'
             ;;
 
-        "${EXIT_RUNNING_IN_TMUX}")
-            do_attach="${AUTO_ATTACH}"
+        "$AUTOMATED_EXIT_RUNNING_IN_TMUX")
+            do_attach="$AUTOMATED_AUTO_ATTACH"
             multiplexer='tmux'
             ;;
 
-        # TODO screen
         *)
-            return "${rc}"
+            return "$rc"
             ;;
     esac
 
-    if is_true "${do_attach}"; then
-        msg_debug "Attaching to multiplexer (${multiplexer}) ..."
-        attach_to_multiplexer "${multiplexer}" "${target}"
+    if is_true "$do_attach"; then
+        log_debug "Attaching to multiplexer (${multiplexer}) ..."
+        attach_to_multiplexer "$multiplexer" "$target"
     fi
 }
 
+
 parse_args () {
-    local list_file inventory_file path line
-    local -a pair
+    declare list_file inventory_file path
+    declare -a pair
 
-    while [[ "${#}" -gt 0 ]]; do
+    while [[ "$#" -gt 0 ]]; do
 
-        case "${1}" in
+        case "$1" in
 
             -h|--help|help|'')
                 exit_after 0 usage
                 ;;
 
             -v|--verbose)
-                DEBUG=TRUE
+                AUTOMATED_DEBUG=TRUE
+                ;;
+
+            --functrace-depth)
+                AUTOMATED_FUNCTRACE_DEPTH="$2"
+                shift
                 ;;
 
             --ssh-command)
-                SSH_COMMAND="${2}"
+                AUTOMATED_SSH_CMD="$2"
                 shift
                 ;;
 
             -s|--sudo)
-                SUDO=TRUE
+                AUTOMATED_SUDO_ENABLE=TRUE
                 ;;
 
             --sudo-password-on-stdin)
-                SUDO_PASSWORD_ON_STDIN=TRUE
+                AUTOMATED_SUDO_PASSWORD_ON_STDIN=TRUE
                 ;;
 
             --sudo-passwordless)
-                SUDO_PASSWORDLESS=TRUE
+                AUTOMATED_SUDO_PASSWORDLESS=TRUE
                 ;;
 
             --sudo-ask-password-cmd)
-                SUDO_ASK_PASSWORD_CMD="${2}"
+                AUTOMATED_SUDO_ASK_PASSWORD_CMD="$2"
                 shift
                 ;;
 
             --dont-attach)
-                AUTO_ATTACH=FALSE
+                AUTOMATED_AUTO_ATTACH=FALSE
                 ;;
 
             --ignore-failed)
-                IGNORE_FAILED=TRUE
+                AUTOMATED_IGNORE_FAILED=TRUE
                 ;;
 
             --prefix-target-output)
-                PREFIX_TARGET_OUTPUT=TRUE
+                AUTOMATED_PREFIX_TARGET_OUTPUT=TRUE
                 ;;
 
             --dump-script)
-                DUMP_SCRIPT=TRUE
-                LOCAL=TRUE
+                AUTOMATED_DUMP_SCRIPT=TRUE
+                AUTOMATED_EXECUTE_LOCALLY=TRUE
                 ;;
 
             --tmux-sock-prefix)
-                TMUX_SOCK_PREFIX="${2}"
+                AUTOMATED_TMUX_SOCK_PREFIX="$2"
                 shift
                 ;;
 
             --tmux-fifo-prefix)
-                TMUX_FIFO_PREFIX="${2}"
+                AUTOMATED_TMUX_FIFO_PREFIX="$2"
                 shift
                 ;;
 
             --stdin)
-                PASS_STDIN=TRUE
+                AUTOMATED_PASS_STDIN=TRUE
                 ;;
 
             --cp)
-                COPY_PAIRS+=("$(printf '%q %q' "${2}" "${3}")")
+                COPY_PAIRS+=("$(printf '%q %q' "$2" "$3")")
                 shift 2
                 ;;
 
             --cp-list)
-                list_file="${2}"
+                list_file="$2"
                 shift
 
-                mapfile -t -O "${#COPY_PAIRS[@]}" COPY_PAIRS < "${list_file}"
+                mapfile -t -O "${#COPY_PAIRS[@]}" COPY_PAIRS < "$list_file"
                 ;;
 
             --drag)
-                DRAG_PAIRS+=("$(printf '%q %q' "${2}" "${3}")")
+                DRAG_PAIRS+=("$(printf '%q %q' "$2" "$3")")
                 shift 2
                 ;;
 
             --drag-list)
-                list_file="${2}"
+                list_file="$2"
                 shift
 
-                mapfile -t -O "${#DRAG_PAIRS[@]}" DRAG_PAIRS < "${list_file}"
+                mapfile -t -O "${#DRAG_PAIRS[@]}" DRAG_PAIRS < "$list_file"
                 ;;
 
             -m|--macro)
-                MACROS+=("${2}")
+                MACROS+=("$2")
                 shift
                 ;;
 
             -l|--load)
-                LOAD_PATHS+=("${2}")
+                LOAD_PATHS+=("$2")
                 shift
                 ;;
 
             -c|--call)
-                CMD="${2}"
+                AUTOMATED_CALL_CMD="$2"
                 shift
                 ;;
 
             -e|--export)
-                # NAME can be both function and variable at the same time
-                if [[ "$(type -t "${2}")" = 'function' ]]; then
-                    EXPORT_FUNCTIONS+=("${2}")
-                fi
-                if [[ "${!2+x}" = 'x' ]]; then
-                    EXPORT_VARS+=("${2}")
+                EXPORT_VARS+=("$2")
+                shift
+                ;;
+
+            --export-fn)
+                if [[ "$(type -t "$2")" = 'function' ]]; then
+                    EXPORT_FUNCTIONS+=("$2")
                 fi
                 shift
                 ;;
 
             -i|--inventory)
-                inventory_file="${2}"
+                inventory_file="$2"
                 shift
-                if [[ -r "${inventory_file}" ]]; then
-                    mapfile -t -O "${#TARGETS[@]}" TARGETS < "${inventory_file}"
+                if [[ -r "$inventory_file" ]]; then
+                    mapfile -t -O "${#TARGETS[@]}" TARGETS < "$inventory_file"
                 else
                     throw "Could not read inventory file"
                 fi
                 ;;
 
             --local)
-                LOCAL=TRUE
-                ;;
-
-            --no-autoload-facts)
-                AUTOLOAD_FACTS=FALSE
+                AUTOMATED_EXECUTE_LOCALLY=TRUE
                 ;;
 
             --version)
-                exit_after 0 printf '%s\n' "${AUTOMATED_VERSION}"
+                exit_after 0 printf '%s\n' "$AUTOMATED_VERSION"
                 ;;
 
+            --)
+                shift
+                TARGETS+=("$@")
+                break
+                ;;
             *)
-                TARGETS+=("${1}")
+                TARGETS+=("$1")
                 ;;
         esac
 
         shift
 
     done
-
-    # Validate
-
-    for path in "${LOAD_PATHS[@]}"; do
-        [[ -r "${path}" ]] || throw "Load path ${path} is not readable"
-    done
-
-    for line in "${COPY_PAIRS[@]}"; do
-        # shellcheck disable=SC2206
-        pair=(${line})
-        path="${pair[0]}"
-
-        [[ -r "${path}" ]] || throw "Copy path ${path} is not readable"
-        ! [[ -d "${path}" ]] || throw "Copy path ${path} is a directory"
-    done
-
-    for line in "${DRAG_PAIRS[@]}"; do
-        # shellcheck disable=SC2206
-        pair=(${line})
-        path="${pair[0]}"
-
-        [[ -r "${path}" ]] || throw "Drag path ${path} is not readable"
-        ! [[ -d "${path}" ]] || throw "Copy path ${path} is a directory"
-    done
 }
 
 
 main () {
-    local rc target
+    declare rc target
 
-    [[ "${#}" -gt 0 ]] || exit_after 1 usage | to_stderr
+    [[ "$#" -gt 0 ]] || exit_after 1 usage >&2
 
     parse_args "$@"
 
-    if is_true "${LOCAL}"; then
-        execute "${CMD}"
+    if is_true "$AUTOMATED_EXECUTE_LOCALLY"; then
+        execute "$AUTOMATED_CALL_CMD"
     elif [[ "${#TARGETS[@]}" -gt 0 ]]; then
         for target in "${TARGETS[@]}"; do
 
             set +e
             (
                 set -e
-                execute "${CMD}" "${target}"
+                execute "$AUTOMATED_CALL_CMD" "$target"
             )
             rc="$?"
             set -e
 
-            if [[ "${rc}" -ne 0 ]]; then
-                is_true "${IGNORE_FAILED}" || exit "${rc}"
+            if [[ "$rc" -ne 0 ]]; then
+                is_true "$AUTOMATED_IGNORE_FAILED" || exit "$rc"
             fi
         done
     else
@@ -584,6 +729,19 @@ main () {
 }
 
 
-if [[ -n "${BASH_SOURCE[0]:-}" && "${0}" = "${BASH_SOURCE[0]}" ]]; then
-    main "${@}"
+if ! (return 2> /dev/null); then
+
+    AUTOMATED_PROG=$(basename "${BASH_SOURCE[0]:-}")
+    AUTOMATED_PROG_DIR=$(dirname "${BASH_SOURCE[0]:-}")
+
+    # shellcheck source=automated-config.sh
+    source "${AUTOMATED_PROG_DIR%/}/automated-config.sh"
+    # shellcheck source=libautomated.sh
+    source "${AUTOMATED_LIBDIR%/}/libautomated.sh"
+
+    if ! bash_minor_version_is_higher_than 4 1; then
+        throw "Minimum supported Bash version is 4.1 (present version is ${BASH_VERSION})"
+    fi
+
+    main "$@"
 fi

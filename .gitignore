@@ -5,3 +5,8 @@
 /.vagrant/*
 /control
 /junit/*
+*.state
+e2e/app_env_testuser_password
+e2e/sshd_target_testuser_password
+e2e/id_rsa*
+e2e/ssh_host_*

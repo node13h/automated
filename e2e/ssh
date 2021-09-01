@@ -1,0 +1,13 @@
+#!/usr/bin/sh
+
+# MIT license
+# Copyright 2021 Sergej Alikov <sergej@alikov.com>
+
+set -eu
+
+SCRIPT_DIR=$(set -e; cd "$(dirname "$0")"; pwd)
+
+CONFIG_FILE="${SCRIPT_DIR}/sshconfig"
+IDENTITY_FILE="${SCRIPT_DIR}/id_rsa"
+
+/usr/bin/ssh -F "$CONFIG_FILE" -i "$IDENTITY_FILE" "$@"

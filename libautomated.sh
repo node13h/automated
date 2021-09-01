@@ -2,7 +2,7 @@
 
 # MIT license
 
-# Copyright (c) 2016-2018 Sergej Alikov <sergej.alikov@gmail.com>
+# Copyright (c) 2016-2021 Sergej Alikov <sergej.alikov@gmail.com>
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -24,164 +24,219 @@
 
 set -euo pipefail
 
-DEBUG=FALSE
-DISABLE_COLOUR=FALSE
+AUTOMATED_DEBUG="${AUTOMATED_DEBUG:-FALSE}"
 
-SSH_COMMAND='ssh'
+# https://no-color.org/
+if [[ -n "${NO_COLOR:-}" ]]; then
+    AUTOMATED_DISABLE_COLOUR="${AUTOMATED_DISABLE_COLOUR:-TRUE}"
+else
+    AUTOMATED_DISABLE_COLOUR="${AUTOMATED_DISABLE_COLOUR:-FALSE}"
+fi
 
-SUDO=FALSE
-SUDO_PASSWORDLESS=FALSE
-SUDO_PASSWORD_ON_STDIN=FALSE
-SUDO_ASK_PASSWORD_CMD=ask_sudo_password
+AUTOMATED_EXIT_RUNNING_IN_TMUX=68
+AUTOMATED_EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX=69
 
-EXIT_TIMEOUT=65
-EXIT_SUDO_PASSWORD_NOT_ACCEPTED=66
-EXIT_SUDO_PASSWORD_REQUIRED=67
-EXIT_RUNNING_IN_TMUX=68
-# TODO EXIT_RUNNING_IN_SCREEN=69
-EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX=70
+declare -a AUTOMATED_SUPPORTED_MULTIPLEXERS=(tmux)
 
-SUPPORTED_MULTIPLEXERS=(tmux)
+AUTOMATED_TMUX_SOCK_PREFIX="${AUTOMATED_TMUX_SOCK_PREFIX:-/tmp/tmux-automated}"
+AUTOMATED_TMUX_FIFO_PREFIX="${AUTOMATED_TMUX_FIFO_PREFIX:-/tmp/tmux-fifo}"
 
-SUDO_UID_VARIABLE='AUTOMATED_SUDO_UID'
-OWNER_UID_SOURCE="\${${SUDO_UID_VARIABLE}:-\$(id -u)}"
+declare -a AUTOMATED_ANSWER_READ_COMMAND=('read' '-r')
 
-TMUX_SOCK_PREFIX='/tmp/tmux-automated'
-TMUX_FIFO_PREFIX='/tmp/tmux-fifo'
-
-ANSI_FG_BLACK=30
-ANSI_FG_RED=31
-ANSI_FG_GREEN=32
-ANSI_FG_YELLOW=33
-ANSI_FG_BLUE=34
-ANSI_FG_MAGENTA=35
-ANSI_FG_CYAN=36
-ANSI_FG_WHITE=37
-
-ANSI_FG_BRIGHT_BLACK=90
-ANSI_FG_BRIGHT_RED=91
-ANSI_FG_BRIGHT_GREEN=92
-ANSI_FG_BRIGHT_YELLOW=93
-ANSI_FG_BRIGHT_BLUE=94
-ANSI_FG_BRIGHT_MAGENTA=95
-ANSI_FG_BRIGHT_CYAN=96
-ANSI_FG_BRIGHT_WHITE=97
-
-ANSWER_READ_COMMAND=('read' '-r')
-
-
-newline () { printf '\n'; }
 
 is_true () {
     [[ "${1,,}" =~ ^(yes|true|on|1)$ ]]
 }
 
-to_stderr () {
-    >&2 cat
-}
-
-to_null () {
-    cat >/dev/null
-}
 
 printable_only () {
   tr -cd '\11\12\15\40-\176'
 }
 
-translated () {
-    local str="${1}"
-    shift
-    local a b
 
-    while [[ "${#}" -gt 1 ]]; do
-        a="${1}"
-        b="${2}"
+translated () {
+    declare str="$1"
+    shift
+    declare a b
+
+    while [[ "$#" -gt 1 ]]; do
+        a="$1"
+        b="$2"
         str="${str//"${a}"/"${b}"}"
 
         shift 2
     done
 
-    printf '%s\n' "${str}"
+    printf '%s\n' "$str"
 }
+
 
 sed_replacement () {
-    local str="${1}"
+    declare str="$1"
 
     # shellcheck disable=SC1003
-    translated "${str}" '\' '\\' '/' '\/' '&' '\&' $'\n' '\n'
+    translated "$str" '\' '\\' '/' '\/' '&' '\&' $'\n' '\n'
 }
+
 
 colorized () {
-    local colour="${1}"
-    local -a processor
+    declare fg_colour="$1"
 
-    if is_true "${DISABLE_COLOUR}"; then
-        processor=(cat)
+    declare -A colour_mappings=(
+        [BLACK]=30
+        [RED]=31
+        [GREEN]=32
+        [YELLOW]=33
+        [BLUE]=34
+        [MAGENTA]=35
+        [CYAN]=36
+        [WHITE]=37
+        [BRIGHT_BLACK]=90
+        [BRIGHT_RED]=91
+        [BRIGHT_GREEN]=92
+        [BRIGHT_YELLOW]=93
+        [BRIGHT_BLUE]=94
+        [BRIGHT_MAGENTA]=95
+        [BRIGHT_CYAN]=96
+        [BRIGHT_WHITE]=97
+    )
+
+    [[ -n "${colour_mappings[$fg_colour]:-}" ]] || throw "Invalid colour ${fg_colour}"
+
+    if is_true "$AUTOMATED_DISABLE_COLOUR"; then
+        cat
     else
-        processor=(sed -e s/^/$'\e'\["${colour}"m/ -e s/$/$'\e'\[0m/)
+        sed -u -e s/^/$'\e'\["${colour_mappings[${fg_colour}]}"m/ -e s/$/$'\e'\[0m/
     fi
-
-    "${processor[@]}"
 }
+
 
 text_block () {
-    local name="${1}"
+    declare name="$1"
 
-    sed -e 1s/^/"$(sed_replacement "BEGIN ${name}")"\\n/ -e \$s/$/\\n"$(sed_replacement "END ${name}")"/
+    declare sed_replacement_begin
+    sed_replacement_begin=$(set -e; sed_replacement "BEGIN ${name}")
+
+    declare sed_replacement_end
+    sed_replacement_end=$(sed_replacement "END ${name}")
+
+    sed -u -e 1s/^/"${sed_replacement_begin}"\\n/ -e \$s/$/\\n"${sed_replacement_end}"/
 }
+
 
 prefixed_lines () {
-    local prefix="${1}"
+    declare prefix="$1"
 
-    sed -e "s/^/$(sed_replacement "${prefix}")/"
+    declare sed_replacement
+    sed_replacement=$(set -e; sed_replacement "$prefix")
+
+    sed -u -e s/^/"${sed_replacement}"/
 }
+
 
 # shellcheck disable=SC2120
 to_debug () {
-    local colour="${1:-${ANSI_FG_YELLOW}}"
+    declare fg_colour="${1:-YELLOW}"
 
-    if is_true "${DEBUG}"; then
-        colorized "${colour}" >&2
+    if is_true "$AUTOMATED_DEBUG"; then
+        colorized "$fg_colour" >&2
     else
-        to_null
+        cat >/dev/null
     fi
 }
+
 
 pipe_debug () {
     tee >(to_debug)
 }
 
-msg () {
-    local msg="${1}"
-    local colour="${2:-${ANSI_FG_WHITE}}"
 
-    if is_true "${DISABLE_COLOUR}"; then
-        printf '%s\n' "${msg}" >&2
-    else
-        printf $'\e''[%sm%s'$'\e''[0m\n' "${colour}" "${msg}" >&2
+log_info () {
+    declare msg="$1"
+
+    printf '%s\n' "$msg" | colorized WHITE >&2
+}
+
+
+log_error () {
+    declare msg="$1"
+
+    printf 'ERROR %s\n' "$msg" | colorized RED >&2
+}
+
+
+log_debug () {
+    declare msg="$1"
+    declare fg_colour="${2:-YELLOW}"
+
+    if is_true "$AUTOMATED_DEBUG"; then
+        printf 'DEBUG %s\n' "$msg" | colorized "$fg_colour" >&2
     fi
 }
 
-msg_debug () {
-    local msg="${1}"
-    local colour="${2:-${ANSI_FG_YELLOW}}"
 
-    if is_true "${DEBUG}"; then
-        msg "DEBUG ${msg}" "${colour}"
-    fi
+log_cmd_trap () {
+    declare bash_command_firstline
+    bash_command_firstline=$(printf '%s\n' "$BASH_COMMAND" | head -n 1)
+
+    # shellcheck disable=SC2086
+    set -- $bash_command_firstline
+
+    [[ "$#" -gt 0 ]] || return 0
+
+    declare stack_depth="${#FUNCNAME[@]}"
+
+    [[ "$stack_depth" -gt 0 ]] || return 0
+
+    ! [[ "$stack_depth" -gt $((AUTOMATED_FUNCTRACE_DEPTH+1)) ]] || return 0
+
+    declare current_fn="${FUNCNAME[1]:-}"
+
+    # Only trace supported commands
+    declare current_command="$1"
+
+    # Filter out function entrypoints
+    ! [[ "$current_fn" == "$current_command" ]] || return 0
+
+    declare current_command_type
+    current_command_type=$(type -t "$current_command") || return 0
+
+    [[ "$current_command_type" =~ file|function ]] || return 0
+
+    declare indent
+    indent=$((stack_depth-1))
+
+    declare padding
+    padding=$(printf "%${indent}s" | tr ' ' '|')
+
+    # This intermediate variable exists solely for Bash 4.2 compatibility.
+    # A bug in this Bash version would cause all process substitution FIFOs
+    # to be invalidated when pipeline is executed.
+    #
+    # Pipeline wrapped in a command substitution does not seem
+    # to trigger the bug, however.
+    #
+    # This does not solve the problem in general, we just ensure this
+    # debug trap handler does not contribute to it.
+    declare msg
+    msg=$(printf 'CMD %s%s%s\n' "${padding}${padding:+ }" "${current_fn:+${current_fn}(): }" "$*" | head -n 1 | colorized GREEN)
+
+    printf '%s\n' "$msg"  >&2
 }
+
 
 throw () {
-    local msg="${1}"
+    declare msg="$1"
 
-    printf '%s\n' "${msg}" >&2
+    printf '%s\n' "$msg" | colorized RED >&2
     exit 1
 }
 
+
 to_file () {
-    local target_path="${1}"
-    local callback="${2:-}"
-    local restore_pipefail mtime_before mtime_after
+    declare target_path="$1"
+    declare callback="${2:-}"
+    declare restore_pipefail mtime_before mtime_after
 
     # diff will return non-zero exit code if file differs, therefore
     # pipefail shell attribute should be disabled for this
@@ -189,170 +244,150 @@ to_file () {
     restore_pipefail=$(shopt -p -o pipefail)
     set +o pipefail
 
-    mtime_before=$(file_mtime "${target_path}" 2>/dev/null) || mtime_before=0
+    if [[ -e "$target_path" ]]; then
+        mtime_before=$(set -e; file_mtime "$target_path" 2>/dev/null)
+    else
+        mtime_before=0
+    fi
 
     if cmd_is_available 'diff' && cmd_is_available 'patch'; then
-        diff -duaN "${target_path}" - | tee >(printable_only | text_block "${1}" | to_debug "${ANSI_FG_BRIGHT_BLACK}") | patch --binary -s -p0 "$target_path"
+        diff -duaN "$target_path" - | tee >(printable_only | text_block "$1" | to_debug BRIGHT_BLACK) | patch --binary -s -p0 "$target_path"
     else
-        msg_debug 'Please consider installing patch and diff commands to enable diff support for to_file()'
+        log_debug 'Please consider installing patch and diff commands to enable diff support for to_file()'
 
-        tee >(printable_only | text_block "${1}" | to_debug "${ANSI_FG_BRIGHT_BLACK}") >"${target_path}"
+        tee >(printable_only | text_block "$1" | to_debug BRIGHT_BLACK) >"$target_path"
     fi
 
-    mtime_after=$(file_mtime "${target_path}")
+    mtime_after=$(set -e; file_mtime "$target_path")
 
-    if [[ -n "${callback}" ]] && [[ "${mtime_before}" -ne "${mtime_after}" ]]; then
-        "${callback}" "${target_path}"
+    if [[ -n "$callback" ]] && [[ "$mtime_before" -ne "$mtime_after" ]]; then
+        eval "$callback"
     fi
 
-    eval "${restore_pipefail}"
+    eval "$restore_pipefail"
 }
 
-quoted () {
-    local -a result=()
 
-    for token in "${@}"; do
-        result+=("$(printf "%q" "${token}")")
+quoted () {
+    declare -a result=()
+
+    declare item
+    for token in "$@"; do
+        item="$(printf "%q\n" "$token")"
+        result+=("$item")
     done
 
     printf '%s\n' "${result[*]}"
 }
 
+
 md5 () {
     md5sum -b | cut -f 1 -d ' '
 }
 
+
 joined () {
-    local sep="${1}"
+    declare sep="$1"
     shift
-    local item
+    declare item
 
-    [[ "${#}" -gt 0 ]] || return 0
+    [[ "$#" -gt 0 ]] || return 0
 
-    printf '%s' "${1}"
+    printf '%s' "$1"
     shift
 
-    for item in "${@}"; do
-        printf "${sep}%s" "${item}"
+    for item in "$@"; do
+        printf "${sep}%s" "$item"
     done
 
     printf '\n'
 }
 
-cmd () {
-    msg_debug "CMD $(quoted "${@}")" "${ANSI_FG_GREEN}"
-
-    "${@}"
-}
 
 cmd_is_available () {
-    command -v "${1}" >/dev/null 2>&1
+    command -v "$1" >/dev/null 2>&1
 }
+
 
 readable_file () {
-    [[ -f "${1}" && -r "${1}" ]]
+    [[ -f "$1" && -r "$1" ]]
 }
+
 
 readable_directory () {
-    [[ -d "${1}" && -r "${1}" ]]
+    [[ -d "$1" && -r "$1" ]]
 }
 
+
+# TODO: Replace with $OSTYPE?
 local_kernel () {
     uname -s
 }
 
-file_mode () {
-    local path="${1}"
 
-    case "$(local_kernel)" in
+file_mode () {
+    declare path="$1"
+
+    case "$(set -e; local_kernel)" in
         FreeBSD|OpenBSD|Darwin)
-            stat -f '%#Mp%03Lp' "${path}"
+            stat -f '%#Mp%03Lp' "$path"
             ;;
         Linux)
-            stat -c "%#03a" "${path}"
+            stat -c "%#03a" "$path"
             ;;
         *)
-            python_interpreter -c "from __future__ import print_function; import sys, os, stat; print('0{:o}'.format((stat.S_IMODE(os.stat(sys.argv[1]).st_mode))))" "${path}"
+            python_interpreter -c "from __future__ import print_function; import sys, os, stat; print('0{:o}'.format((stat.S_IMODE(os.stat(sys.argv[1]).st_mode))))" "$path"
             ;;
     esac
 }
+
 
 file_owner () {
-    local path="${1}"
+    declare path="$1"
 
-    case "$(local_kernel)" in
+    case "$(set -e; local_kernel)" in
         FreeBSD|OpenBSD|Darwin)
-            stat -f '%Su:%Sg' "${path}"
+            stat -f '%Su:%Sg' "$path"
             ;;
         Linux)
-            stat -c "%U:%G" "${path}"
+            stat -c "%U:%G" "$path"
             ;;
         *)
-            python_interpreter -c "from __future__ import print_function; import sys, os, stat, pwd, grp; st = os.stat(sys.argv[1]); print('{}:{}'.format(pwd.getpwuid(st.st_uid)[0], grp.getgrgid(st.st_gid)[0]))" "${path}"
+            python_interpreter -c "from __future__ import print_function; import sys, os, stat, pwd, grp; st = os.stat(sys.argv[1]); print('{}:{}'.format(pwd.getpwuid(st.st_uid)[0], grp.getgrgid(st.st_gid)[0]))" "$path"
             ;;
     esac
 }
+
 
 file_mtime () {
-    local path="${1}"
+    declare path="$1"
 
-    case "$(local_kernel)" in
+    case "$(set -e; local_kernel)" in
         FreeBSD|OpenBSD|Darwin)
-            stat -f '%Um' "${path}"
+            stat -f '%Um' "$path"
             ;;
         Linux)
-            stat -c "%Y" "${path}"
+            stat -c "%Y" "$path"
             ;;
         *)
-            python_interpreter -c "from __future__ import print_function; import sys, os, stat; print(os.stat(sys.argv[1])[stat.ST_MTIME])" "${path}"
+            python_interpreter -c "from __future__ import print_function; import sys, os, stat; print(os.stat(sys.argv[1])[stat.ST_MTIME])" "$path"
             ;;
     esac
 }
 
-# This command is usually run on the controlling workstation, not remote
-attach_to_multiplexer () {
-    local multiplexer="${1}"
-    local target="${2:-LOCAL HOST}"
-
-    local -a handler
-    local -a command
-
-    local -a ssh_args
-
-    if is_true "${LOCAL}"; then
-        handler=(eval)
-    else
-        mapfile -t ssh_args < <(target_as_ssh_arguments "${target}")
-        handler=("${SSH_COMMAND}" '-t' '-q' "$(quoted "${ssh_args[@]}")" '--')
-    fi
-
-    case "${multiplexer}" in
-        tmux)
-            # shellcheck disable=SC2016
-            command=('tmux' '-S' "$(quoted "${TMUX_SOCK_PREFIX}-${OWNER_UID_SOURCE}")" 'attach')
-            ;;
-
-        # TODO screen
-    esac
-
-    msg_debug "Attaching via ${handler[*]}" "${ANSI_FG_BRIGHT_BLUE}"
-    msg_debug "Attach command: ${command[*]}"
-
-    eval "${handler[@]}" "${command[@]}"
-}
 
 tmux_command () {
-    msg_debug "tmux command ${*} over the ${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID} socket" \
-              "${ANSI_FG_BRIGHT_BLUE}"
-    tmux -S "${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}" "${@}"
+    log_debug "tmux command ${*} over the ${AUTOMATED_TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID} socket" BRIGHT_BLUE
+    tmux -S "${AUTOMATED_TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}" "$@"
 }
 
-multiplexer_present () {
-    local multiplexer
 
-    for multiplexer in "${SUPPORTED_MULTIPLEXERS[@]}"; do
-        if cmd_is_available "${multiplexer}"; then
-            printf '%s\n' "${multiplexer}"
+multiplexer_present () {
+    declare multiplexer
+
+    for multiplexer in "${AUTOMATED_SUPPORTED_MULTIPLEXERS[@]}"; do
+        if cmd_is_available "$multiplexer"; then
+            printf '%s\n' "$multiplexer"
             return 0
         fi
     done
@@ -360,109 +395,120 @@ multiplexer_present () {
     return 1
 }
 
-supported_multiplexers () {
-    printf '%s\n' "${SUPPORTED_MULTIPLEXERS[@]}"
-}
 
 run_in_tmux () {
-    local command="${1}"
+    declare command="$1"
 
     if tmux_command ls 2>/dev/null | to_debug; then
-        msg_debug "Multiplexer is already running"
-        exit "${EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX}"
+        log_debug "Multiplexer is already running"
+        exit "$AUTOMATED_EXIT_MULTIPLEXER_ALREADY_RUNNING_TMUX"
     fi
 
-    local sock_file="${TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}"
-    local fifo_file="${TMUX_FIFO_PREFIX}-${AUTOMATED_OWNER_UID}"
+    declare sock_file="${AUTOMATED_TMUX_SOCK_PREFIX}-${AUTOMATED_OWNER_UID}"
+    declare fifo_file="${AUTOMATED_TMUX_FIFO_PREFIX}-${AUTOMATED_OWNER_UID}"
 
-    msg_debug "Starting multiplexer and executing commands"
+    declare fifo_file_quoted
+    fifo_file_quoted=$(set -e; quoted "$fifo_file")
 
-    msg_debug "$command"
+    log_debug "Starting multiplexer and executing commands"
 
-    mkfifo "${fifo_file}"
+    log_debug "$command"
+
+    mkfifo "$fifo_file"
 
     tmux_command \
         new-session \
         -d \
-        "/usr/bin/env bash $(quoted "${fifo_file}")"
+        "/usr/bin/env bash ${fifo_file_quoted}"
 
+    # shellcheck disable=SC2094
     {
         cat <<EOF
-rm -f -- $(quoted "${fifo_file}")
+rm -f -- ${fifo_file_quoted}
 EOF
-        bootstrap_environment "${CURRENT_TARGET}"
+        automated_bootstrap_environment "$AUTOMATED_CURRENT_TARGET"
 
         cat <<EOF
 ${command}
 EOF
-    } >"${fifo_file}"
+    } >"$fifo_file"
 
-    chown "${AUTOMATED_OWNER_UID}" "${sock_file}"
+    chown "$AUTOMATED_OWNER_UID" "$sock_file"
 
-    exit "${EXIT_RUNNING_IN_TMUX}"
+    exit "$AUTOMATED_EXIT_RUNNING_IN_TMUX"
 }
 
-run_in_multiplexer () {
-    local multiplexer
 
-    if ! multiplexer=$(multiplexer_present); then
-        throw "Multiplexer is not available. Please install one of the following: ${SUPPORTED_MULTIPLEXERS[*]}"
+run_in_multiplexer () {
+    declare multiplexer
+
+    if ! multiplexer=$(set -e; multiplexer_present); then
+        throw "Multiplexer is not available. Please install one of the following: ${AUTOMATED_SUPPORTED_MULTIPLEXERS[*]}"
     fi
 
-    case "${multiplexer}" in
+    case "$multiplexer" in
         tmux)
-            run_in_tmux "${@}"
+            run_in_tmux "$@"
             ;;
-
-        # TODO screen
     esac
 }
 
+
+# shellcheck disable=SC2016
 interactive_multiplexer_session () {
-    run_in_multiplexer "bash -i -s -- <(bootstrap_environment "$CURRENT_TARGET") <<< $(quoted 'source $1; exec </dev/tty')"
+    declare current_target_quoted
+    current_target_quoted=$(set -e; quoted "$AUTOMATED_CURRENT_TARGET")
+
+    declare script_quoted
+    script_quoted=$(set -e; quoted 'source $1; exec </dev/tty')
+
+    run_in_multiplexer "bash -i -s -- <(automated_bootstrap_environment ${current_target_quoted}) <<< ${script_quoted}"
 }
 
+
 interactive_answer () {
-    local target="${1}"
-    local prompt="${2}"
-    local default_value="${3:-}"
+    declare target="$1"
+    declare prompt="$2"
+    declare default_value="${3:-}"
 
-    local answer
+    declare answer
 
-    local -a message=("${prompt}" "(${target})")
-    [[ -z "${default_value}" ]] || message+=("[${default_value}]")
+    declare -a message=("$prompt" "(${target})")
+    [[ -z "$default_value" ]] || message+=("[${default_value}]")
 
     {
         printf '%s: ' "${message[*]}"
-        "${ANSWER_READ_COMMAND[@]}" answer
-        newline
+        "${AUTOMATED_ANSWER_READ_COMMAND[@]}" answer
+        printf '\n'
 
     } </dev/tty >/dev/tty
 
-    if [[ -n "${default_value}" && -z "${answer}" ]]; then
-        printf '%s\n' "${default_value}"
+    if [[ -n "$default_value" && -z "$answer" ]]; then
+        printf '%s\n' "$default_value"
     else
-        printf '%s\n' "${answer}"
+        printf '%s\n' "$answer"
     fi
 }
 
-interactive_secret () {
-    local -a ANSWER_READ_COMMAND=('read' '-r' '-s')
 
-    interactive_answer "${@}"
+interactive_secret () {
+    declare -a AUTOMATED_ANSWER_READ_COMMAND=('read' '-r' '-s')
+
+    interactive_answer "$@"
 }
 
-confirm () {
-    local target="${1}"
-    local prompt="${2}"
-    local default_value="${3:-N}"
 
-    local answer
+confirm () {
+    declare target="$1"
+    declare prompt="$2"
+    declare default_value="${3:-N}"
+
+    declare answer
 
     while true; do
-        answer=$(interactive_answer "${target}" "${prompt} Y/N?" "${default_value}")
+        answer=$(set -e; interactive_answer "$target" "${prompt} Y/N?" "$default_value")
 
-        case "${answer}" in
+        case "$answer" in
             [yY]) return 0
                   ;;
             [nN]) return 1
@@ -471,258 +517,256 @@ confirm () {
     done
 }
 
-ask_sudo_password () {
-    local sudo_password
-
-    if is_true "${SUDO_PASSWORD_ON_STDIN}"; then
-        read -r sudo_password
-    else
-        sudo_password=$(interactive_secret "${1:-localhost}" "SUDO password")
-    fi
-
-    printf '%s\n' "${sudo_password}"
-}
 
 target_as_vars () {
-    local target="${1}"
-    local username_var="${2:-username}"
-    local address_var="${3:-address}"
-    local port_var="${4:-port}"
+    declare target="$1"
+    declare username_var="${2:-username}"
+    declare address_var="${3:-address}"
+    declare port_var="${4:-port}"
 
-    local username address port
-    local -a args=()
+    declare username address port
+    declare -a args=()
 
-    if [[ "${target}" =~ ^((.+)@)?(\[([:0-9A-Fa-f]+)\])(:([0-9]+))?$ ]] ||
-           [[ "${target}" =~ ^((.+)@)?(([-.0-9A-Za-z]+))(:([0-9]+))?$ ]]; then
-        printf '%s=%s\n' "${username_var}" "$(quoted "${BASH_REMATCH[2]}")"
-        printf '%s=%s\n' "${address_var}" "$(quoted "${BASH_REMATCH[4]}")"
-        printf '%s=%s\n' "${port_var}" "$(quoted "${BASH_REMATCH[6]}")"
+    if [[ "$target" =~ ^((.+)@)?(\[([:0-9A-Fa-f]+)\])(:([0-9]+))?$ ]] ||
+           [[ "$target" =~ ^((.+)@)?(([-.0-9A-Za-z]+))(:([0-9]+))?$ ]]; then
+        printf '%s=%q\n' "$username_var" "${BASH_REMATCH[2]}"
+        printf '%s=%q\n' "$address_var" "${BASH_REMATCH[4]}"
+        printf '%s=%q\n' "$port_var" "${BASH_REMATCH[6]}"
     else
         return 1
     fi
 }
 
+
 target_address_only () {
-    local target="${1}"
-    local username address port
+    declare target="$1"
+    declare username address port
 
-    eval "$(target_as_vars "${target}" username address port)"
+    declare var_definitions
+    var_definitions=$(set -e; target_as_vars "$target" username address port)
 
-    printf '%s\n' "${address}"
+    eval "$var_definitions"
+
+    printf '%s\n' "${address}${port:+:${port}}"
 }
 
+
 target_as_ssh_arguments () {
-    local target="${1}"
-    local username address port
-    local -a args=()
+    declare target="$1"
+    declare username address port
+    declare -a args=()
 
-    eval "$(target_as_vars "${target}" username address port)"
+    declare var_definitions
+    var_definitions=$(set -e; target_as_vars "$target" username address port)
 
-    if [[ -n "${port}" ]]; then
-        args+=(-p "${port}")
+    eval "$var_definitions"
+
+    if [[ -n "$port" ]]; then
+        args+=(-p "$port")
     fi
 
-    if [[ -n "${username}" ]]; then
-        args+=(-l "${username}")
+    if [[ -n "$username" ]]; then
+        args+=(-l "$username")
     fi
 
-    args+=("${address}")
+    args+=("$address")
 
     printf '%s\n' "${args[@]}"
 }
 
-pty_helper_script () {
-    cat "${AUTOMATED_LIBDIR%/}/pty_helper.py"
+
+is_function () {
+    declare name="$1"
+
+    [[ "$(type -t "$name")" = 'function' ]]
 }
 
-pty_helper_settings () {
-    local var
-    local -a result=()
-
-    for var in SUDO_UID_VARIABLE EXIT_TIMEOUT EXIT_SUDO_PASSWORD_NOT_ACCEPTED EXIT_SUDO_PASSWORD_REQUIRED; do
-        result+=("${var}=$(quoted "${!var}")")
-    done
-
-    printf '%s\n' "${result[*]}"
-}
-
-in_proper_context () {
-    # shellcheck disable=SC2178
-    local command="${1}"
-    local force_sudo_password="${2:-FALSE}"
-    # shellcheck disable=SC2016
-    local cmdline=('PYTHON_INTERPRETER=$(command -v python3) || PYTHON_INTERPRETER=$(command -v python2);')
-
-    if is_true "${SUDO}"; then
-        cmdline+=("$(pty_helper_settings) \"\${PYTHON_INTERPRETER}\" <(\"\${PYTHON_INTERPRETER}\" -m base64 -d <<< $(pty_helper_script | gzip | base64_encode) | gunzip)")
-
-        if ! is_true "${force_sudo_password}" && is_true "${SUDO_PASSWORDLESS}"; then
-            cmdline+=("--sudo-passwordless")
-        fi
-    fi
-
-    # shellcheck disable=SC2128
-    cmdline+=("${command}")
-
-    printf '%s\n' "${cmdline[*]}"
-}
 
 file_as_code () {
-    local src="${1}"
-    local dst="${2}"
-    local mode boundary
+    declare src="$1"
+    declare dst="$2"
+    declare mode boundary
 
-    if [[ -d "${src}" ]]; then
-        cat <<EOF
-throw $(quoted "${src} is a directory. directories are not supported")
-EOF
-        return 1
+    if [[ -d "$src" ]]; then
+        throw "${src} is a directory. directories are not supported"
     fi
 
-    if ! [[ -r "${src}" ]]; then
-        cat <<EOF
-throw $(quoted "${src} was not readable at the moment of the shipping attempt")
-EOF
-        return 1
+    if ! [[ -e "$src" ]]; then
+        throw "${src} does not exist"
     fi
 
-    mode=$(file_mode "${src}")
+    boundary="EOF-$(md5 <<< "$dst")"
 
-    boundary="EOF-$(md5 <<< "${dst}")"
+    if [[ -f "$src" ]]; then
+        mode=$(set -e; file_mode "$src")
+    fi
+
+    declare dst_quoted
+    dst_quoted=$(set -e; quoted "$dst")
 
     cat <<EOF
-touch $(quoted "${dst}")
-chmod 0600 $(quoted "${dst}")
-base64_decode <<"${boundary}" | gzip -d >$(quoted "${dst}")
+base64_decode <<"${boundary}" | gzip -d >${dst_quoted}
 EOF
 
-    gzip -n -6 - <"${src}" | base64_encode
+    gzip -n -6 - <"$src" | base64_encode
 
     cat <<EOF
 ${boundary}
-chmod ${mode} $(quoted "${dst}")
-msg_debug $(quoted "copied ${src} to ${dst} on the target")
 EOF
-}
 
-is_function () {
-    local name="${1}"
-
-    [[ "$(type -t "${name}")" = 'function' ]]
-}
-
-drop () {
-    local file_id="${1}"
-    local dst="${2:-}"
-
-    local file_id_hash original_mode
-
-    file_id_hash=$(md5 <<< "${file_id}")
-
-    is_function "drop_${file_id_hash}_body" || throw "File id ${file_id} is not dragged"
-
-    if [[ -n "${dst}" ]]; then
-        original_mode=$("drop_${file_id_hash}_mode")
-
-        local mode="${3:-${original_mode}}"
-
-        touch "${dst}"
-        chmod 0600 "${dst}"
-
-        "drop_${file_id_hash}_body" "${file_id}" >"${dst}"
-
-        chmod "${mode}" "${dst}"
-    else
-        "drop_${file_id_hash}_body" "${file_id}"
+    if [[ -f "$src" ]]; then
+        cat <<EOF
+chmod ${mode} ${dst_quoted}
+EOF
     fi
+
+    declare log_message_quoted
+    log_message_quoted=$(set -e; quoted "copied ${src} to ${dst} on the target")
+
+    cat <<EOF
+log_debug ${log_message_quoted}
+EOF
 }
 
 
 file_as_function () {
-    local src="${1}"
-    local file_id="${2:-"${src}"}"
-    local mode owner file_id_hash
+    declare src="$1"
+    declare file_id="${2:-${src}}"
+    declare mode file_id_hash
 
-    if [[ -d "${src}" ]]; then
-        cat <<EOF
-throw $(quoted "${src} is a directory. directories are not supported")
-EOF
-        return 1
+    if [[ -d "$src" ]]; then
+        throw "${src} is a directory. directories are not supported"
     fi
 
-    if ! [[ -r "${src}" ]]; then
-        cat <<EOF
-throw $(quoted "${src} was not readable at the moment of the shipping attempt")
-EOF
-        return 1
+    if ! [[ -e "$src" ]]; then
+        throw "${src} does not exist"
     fi
 
-    file_id_hash=$(md5 <<< "${file_id}")
+    file_id_hash=$(md5 <<< "$file_id")
 
-    mode=$(file_mode "${src}")
-    owner=$(file_owner "${src}")
+    if [[ -f "$src" ]]; then
+        mode=$(set -e; file_mode "$src")
+    fi
 
     cat <<EOF
 drop_${file_id_hash}_body () {
     base64_decode <<"EOF-${file_id_hash}" | gzip -d
 EOF
 
-    gzip -n -6 - <"${src}" | base64_encode
+    gzip -n -6 - <"$src" | base64_encode
 
     cat <<EOF
 EOF-${file_id_hash}
 }
-
-drop_${file_id_hash}_mode () {
-    printf '%s\n' '${mode}'
-}
-
-drop_${file_id_hash}_owner () {
-    printf '%s\n' '${owner}'
-}
-msg_debug $(quoted "shipped ${src} as the file id ${file_id}")
 EOF
-}
+    if [[ -f "$src" ]]; then
+        cat <<EOF
+AUTOMATED_DROP_${file_id_hash^^}_MODE=${mode}
+EOF
+    fi
 
-sourced_drop () {
-    local file_id="${1}"
-
-    local file_id_hash
-
-    file_id_hash=$(md5 <<< "${file_id}")
+    declare log_message_quoted
+    log_message_quoted=$(set -e; quoted "shipped ${src} as the file id ${file_id}")
 
     cat <<EOF
-is_function "drop_${file_id_hash}_body" || throw $(quoted "File id ${file_id} is not dragged")
-source <(drop_${file_id_hash}_body)
-msg_debug $(quoted "sourced file id ${file_id}")
+log_debug ${log_message_quoted}
 EOF
 }
 
-declared_var () {
-    local var="${1}"
 
-    declare -p "${var}"
-    printf 'msg_debug "declared variable %s"\n' "$(quoted "${var}")"
+declared_var () {
+    declare var="$1"
+
+    (
+        set -e
+
+        if [[ -n "${2+defined}" ]]; then
+            unset "$var"
+            declare "${var}=${2}"
+        fi
+
+        declare -p "$var"
+    )
+
+    declare var_quoted
+    var_quoted=$(set -e; quoted "$var")
+
+    printf 'log_debug "declared variable %s"\n' "$var_quoted"
 }
+
 
 declared_function () {
-    local fn="${1}"
+    declare fn="$1"
 
-    declare -f "${fn}"
-    printf 'msg_debug "declared function %s"\n' "$(quoted "${fn}")"
+    declare -f "$fn"
+
+    declare fn_quoted
+    fn_quoted=$(set -e; quoted "$fn")
+
+    printf 'log_debug "declared function %s"\n' "$fn_quoted"
 }
+
+
+drop () {
+    declare file_id="$1"
+    declare dst="${2:-}"
+
+    declare mode file_id_hash mode_var
+
+    file_id_hash=$(md5 <<< "$file_id")
+
+    is_function "drop_${file_id_hash}_body" || throw "File id ${file_id} is not dragged"
+
+    if [[ -n "$dst" ]]; then
+        mode_var="AUTOMATED_DROP_${file_id_hash^^}_MODE"
+        if [[ -n "${!mode_var:-}" ]]; then
+            mode="${3:-${!mode_var}}"
+        else
+            mode="${3:-}"
+        fi
+
+        "drop_${file_id_hash}_body" "${file_id}" >"$dst"
+
+        if [[ -n "${mode:-}" ]]; then
+            chmod "$mode" "$dst"
+        fi
+    else
+        "drop_${file_id_hash}_body" "$file_id"
+    fi
+}
+
+
+sourced_drop () {
+    declare file_id="$1"
+
+    declare file_id_hash
+
+    file_id_hash=$(md5 <<< "$file_id")
+
+    declare error_message_quoted log_message_quoted
+    error_message_quoted=$(set -e; quoted "File id ${file_id} is not dragged")
+    log_message_quoted=$(set -e; quoted "sourced file id ${file_id}")
+
+    cat <<EOF
+is_function "drop_${file_id_hash}_body" || throw ${error_message_quoted}
+source <(drop_${file_id_hash}_body)
+log_debug ${log_message_quoted}
+EOF
+}
+
 
 exit_after () {
-    local exit_code="${1}"
+    declare exit_code="$1"
     shift
 
-    "${@}"
+    "$@"
 
-    exit "${exit_code}"
+    exit "$exit_code"
 }
 
+
 base64_encode () {
-    if [[ "$(local_kernel)" = 'Linux' ]] && cmd_is_available base64; then
+    if [[ "$(set -e; local_kernel)" = 'Linux' ]] && cmd_is_available base64; then
         base64 -w 0
     elif cmd_is_available openssl; then
         openssl base64 -A
@@ -733,8 +777,9 @@ base64_encode () {
     printf '\n'
 }
 
+
 base64_decode () {
-    if [[ "$(local_kernel)" = 'Linux' ]] && cmd_is_available base64; then
+    if [[ "$(set -e; local_kernel)" = 'Linux' ]] && cmd_is_available base64; then
         base64 -d
     elif cmd_is_available openssl; then
         openssl base64 -d -A
@@ -743,22 +788,24 @@ base64_decode () {
     fi
 }
 
+
 python_interpreter () {
     if cmd_is_available python3; then
-        python3 "${@}"
+        python3 "$@"
     else
-        python2 "${@}"
+        python2 "$@"
     fi
 }
 
+
 semver_matches_one_of () {
-    local version_to_match="${1}"
+    declare version_to_match="$1"
     shift
 
     declare -r SEMVER_RE='^([0-9]+).([0-9]+).([0-9]+)(-([0-9A-Za-z.-]+))?(\+([0-9A-Za-z.-]))?$'
     declare -r VER_RE='^([0-9]+)(.([0-9]+))?(.([0-9]+))?$'
 
-    [[ "${version_to_match}" =~ $SEMVER_RE ]] || return 1
+    [[ "$version_to_match" =~ $SEMVER_RE ]] || return 1
 
     declare major="${BASH_REMATCH[1]}"
     declare minor="${BASH_REMATCH[2]}"
@@ -786,27 +833,42 @@ semver_matches_one_of () {
     return 1
 }
 
+
+bash_minor_version_is_higher_than () {
+    declare major="$1"
+    declare minor="$2"
+
+    ! [[ "${BASH_VERSINFO[0]}" -lt "$major" ]] || return 1
+
+    ! [[ "${BASH_VERSINFO[0]}" -eq "$major" && "${BASH_VERSINFO[1]}" -lt "$minor" ]] || return 1
+}
+
+
 supported_automated_versions () {
-    if ! semver_matches_one_of "${AUTOMATED_VERSION}" "$@"; then
-        throw "Unsupported version ${AUTOMATED_VERSION} of Automated detected. Supported versions are: $(joined ', ' "${@}")"
+    if ! semver_matches_one_of "$AUTOMATED_VERSION" "$@"; then
+        declare supported_versions
+        supported_versions=$(set -e; joined ', ' "$@")
+
+        throw "Unsupported version ${AUTOMATED_VERSION} of Automated detected. Supported versions are: ${supported_versions}"
     fi
 }
 
-bootstrap_environment () {
-    local target="${1}"
+
+automated_bootstrap_environment () {
+    declare target="$1"
 
     cat <<EOF
 #!/usr/bin/env bash
 
 set -euo pipefail
 
-msg_debug () {
+log_debug () {
     # Mock for the bootstrap envirnment
     return 0
 }
 
 # Inception :)
-environment_script () {
+automated_environment_script () {
     drop '__automated_environment'
 }
 
@@ -818,7 +880,32 @@ EOF
     declared_function 'is_function'
     declared_function 'throw'
 
-    file_as_function <(environment_script "${target}") \
-                     '__automated_environment'
+    # coproc is necessary to catch an error exit code from the process
+    # substitution
+    declare cpid
+    coproc automated_environment_script "$target"
+    cpid="$COPROC_PID"
+
+    file_as_function <(cat <&"${COPROC[0]}") '__automated_environment'
+
+    # wait will return the exit code of the coproc
+    wait "$cpid"
     sourced_drop '__automated_environment'
+}
+
+
+deprecated_with () {
+    log_debug "${FUNCNAME[1]}() is DEPRECATED. Use ${1}() instead."
+
+    "$@"
+}
+
+
+deprecated_with_alternatives () {
+    log_debug "${FUNCNAME[1]}() is DEPRECATED. Alternatives ${*}"
+}
+
+
+deprecated_function () {
+    log_debug "${FUNCNAME[1]}() is DEPRECATED."
 }

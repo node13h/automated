@@ -1,0 +1,18 @@
+FROM docker.io/ubuntu:21.04
+
+RUN apt-get update && apt-get install -y openssh-server python3 sudo && rm -rf /var/lib/apt/lists/*
+
+COPY --chmod=0600 ssh_host_ecdsa_key ssh_host_ecdsa_key.pub ssh_host_ed25519_key ssh_host_ed25519_key.pub ssh_host_rsa_key ssh_host_rsa_key.pub /etc/ssh/
+
+RUN mkdir -p /run/sshd
+
+# Not using build secret here as these images are local and we embed other
+# secrets above anyway.
+ARG TESTUSER_HASH
+RUN useradd -u 1001 -d /home/testuser -G sudo -p "$TESTUSER_HASH" testuser
+
+COPY --chmod=0600 --chown=1001 id_rsa.pub /home/testuser/.ssh/authorized_keys
+
+EXPOSE 22/tcp
+
+ENTRYPOINT ["/usr/sbin/sshd", "-D"]
