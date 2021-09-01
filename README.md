@@ -169,9 +169,16 @@ Run `make test`.
 Prerequisites:
 - Podman
 
-First, run `make images` in the `e2e` directory to build SSHD target images and access keys locally. See `e2e/Makefile` for a list of image tags produced.
-Now you can run `make SSHD_TARGET_IMAGE=<image:tag> sshd-target app-container` to bring a container running SSHD and a container with `automated.sh` pre-installed up. Execute `make e2e-test` to run functional tests against he currently running SSHD target container.
-To bring containers down, run `make app-container-down sshd-target-down`.
+1. Create the test environment:
+
+    - `make SSHD_TARGET_OS=centos7 sshd-target`
+    - `make app-env`
+
+    First step creates a sshd container with a pre-configured test user. Supported values for `SSHD_TARGET_OS` are `centos7`, `centos8`, `fedora34`, and `ubuntu2104`.
+    Second step creates a container with the `ssh` command overriden (see [e2e/ssh](e2e/ssh)) to enable access the sshd target and a working copy Automated installed. You need to run `make app-env-down app-env` each time you modify the Automated code to update the app env container with the new changes.
+
+2. Run `make e2e-test` to run the functional tests inside the created containers. Due to some issues with STDIN handling in Podman you might get an occassional `Error: read unixpacket @->/proc/self/fd/17/attach: read: connection reset by peer` error.
+3. Run `make app-env-down sshd-target-down` to destroy both containers.
 
 
 ### Vagrant
