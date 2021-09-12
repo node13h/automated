@@ -476,16 +476,16 @@ execute () {
         (
             set -e
 
-            # coproc is necessary to catch an error exit code from the process
-            # substitution. The RENDERED_SCRIPT_STDIN FD is used to connect main
-            # process STDIN to coproc STDIN to enable the --stdin feature.
+            # coproc is used to pass the exit code from the process substitution
+            # to the main thread.
             declare cpid
-            { coproc rendered_script "$target" "$command" <&"$RENDERED_SCRIPT_STDIN"; } {RENDERED_SCRIPT_STDIN}<&0
-
+            coproc { read -r exit_code; exit "$exit_code"; }
             cpid="$COPROC_PID"
 
-            handler_command "$force_sudo_password" > >("${output_processor[@]}") 2> >("${output_processor[@]}" >&2) < <(cat <&"${COPROC[0]}")
+            # shellcheck disable=SC2064
+            handler_command "$force_sudo_password" > >("${output_processor[@]}") 2> >("${output_processor[@]}" >&2) < <(trap "printf -- '%s\n' \"\$?\" >&\"${COPROC[1]}\"" EXIT; rendered_script "$target" "$command")
 
+            # wait will return the exit code of the coproc
             wait "$cpid"
         )
         rc="$?"
