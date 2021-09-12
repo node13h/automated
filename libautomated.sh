@@ -880,16 +880,8 @@ EOF
     declared_function 'is_function'
     declared_function 'throw'
 
-    # coproc is necessary to catch an error exit code from the process
-    # substitution
-    declare cpid
-    coproc automated_environment_script "$target"
-    cpid="$COPROC_PID"
-
-    file_as_function <(cat <&"${COPROC[0]}") '__automated_environment'
-
-    # wait will return the exit code of the coproc
-    wait "$cpid"
+    # shellcheck disable=SC2064
+    automated_environment_script "$target" | file_as_function /dev/stdin '__automated_environment'
     sourced_drop '__automated_environment'
 }
 
