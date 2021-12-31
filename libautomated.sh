@@ -174,10 +174,16 @@ log_debug () {
     fi
 }
 
-
+# WARNING: this function is a trap which might be executed
+# for each command, including process substitutions.
+# Do not use anything which might alter global built-in Bash variables,
+# for example do not use regex matches as they alter BASH_REMATCH.
+# Do not use pipes - they break process substitution FIFOs (in some
+# Bash versions, like 4.2 it's obvious, in some - it might be a rarely
+# reproducible race condition which only manifests occassionally.
 log_cmd_trap () {
     declare bash_command_firstline
-    bash_command_firstline=$(printf '%s\n' "$BASH_COMMAND" | head -n 1)
+    bash_command_firstline="${BASH_COMMAND%%$'\n'*}"
 
     # shellcheck disable=SC2086
     set -- $bash_command_firstline
@@ -201,28 +207,27 @@ log_cmd_trap () {
     declare current_command_type
     current_command_type=$(type -t "$current_command") || return 0
 
-    [[ "$current_command_type" =~ file|function ]] || return 0
+    if ! [[ "$current_command_type" == file || "$current_command_type" == function ]]; then
+        return 0
+    fi
 
     declare indent
     indent=$((stack_depth-1))
 
     declare padding
-    padding=$(printf "%${indent}s" | tr ' ' '|')
+    padding=$(printf "%${indent}s\n" '')
 
-    # This intermediate variable exists solely for Bash 4.2 compatibility.
-    # A bug in this Bash version would cause all process substitution FIFOs
-    # to be invalidated when pipeline is executed.
-    #
-    # Pipeline wrapped in a command substitution does not seem
-    # to trigger the bug, however.
-    #
-    # This does not solve the problem in general, we just ensure this
-    # debug trap handler does not contribute to it.
-    declare msg
-    msg=$(printf 'CMD %s%s%s\n' "${padding}${padding:+ }" "${current_fn:+${current_fn}(): }" "$*" | head -n 1 | colorized GREEN)
+    declare format
 
-    printf '%s\n' "$msg"  >&2
-}
+    if is_true "$AUTOMATED_DISABLE_COLOUR"; then
+        format='CMD %s%s%s\n'
+    else
+        format=$'\e[32mCMD %s%s%s\e[0m\\n'
+    fi
+
+    # shellcheck disable=SC2059
+    printf "$format" "${padding// /|}${padding:+ }" "${current_fn:+${current_fn}(): }" "$*" >&2
+} <&- >&-
 
 
 throw () {
@@ -233,6 +238,8 @@ throw () {
 }
 
 
+# This function reads from STDIN. Any command which has a potential to swallow
+# the STDIN data must have it's STDIN descriptor closed.
 to_file () {
     declare target_path="$1"
     declare callback="${2:-}"
@@ -245,17 +252,17 @@ to_file () {
     set +o pipefail
 
     if [[ -e "$target_path" ]]; then
-        mtime_before=$(set -e; file_mtime "$target_path" 2>/dev/null)
+        mtime_before=$(set -e; file_mtime "$target_path" 2>/dev/null <&-)
     else
         mtime_before=0
     fi
 
-    if cmd_is_available 'diff' && cmd_is_available 'patch'; then
-        diff -duaN "$target_path" - | tee >(printable_only | text_block "$1" | to_debug BRIGHT_BLACK) | patch --binary -s -p0 "$target_path"
+    if cmd_is_available 'diff' <&- && cmd_is_available 'patch' <&-; then
+        diff -duaN "$target_path" - | tee >(printable_only | text_block "$1" | to_debug BRIGHT_BLACK >/dev/null) | patch --binary -s -p0 "$target_path"
     else
-        log_debug 'Please consider installing patch and diff commands to enable diff support for to_file()'
+        log_debug 'Please consider installing patch and diff commands to enable diff support for to_file()' <&-
 
-        tee >(printable_only | text_block "$1" | to_debug BRIGHT_BLACK) >"$target_path"
+        tee >(printable_only | text_block "$1" | to_debug BRIGHT_BLACK >/dev/null) >"$target_path"
     fi
 
     mtime_after=$(set -e; file_mtime "$target_path")
