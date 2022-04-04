@@ -2,7 +2,7 @@
 
 # MIT license
 
-# Copyright (c) 2016-2021 Sergej Alikov <sergej.alikov@gmail.com>
+# Copyright (c) 2016-2022 Sergej Alikov <sergej.alikov@gmail.com>
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -589,10 +589,23 @@ is_function () {
 }
 
 
+stdin_as_code () {
+    declare dst="${1:-}"
+
+    if [[ -n "$dst" ]]; then
+        printf 'base64_decode <<"EOF" | gzip -d >%q\n' "$dst"
+    else
+        printf 'base64_decode <<"EOF" | gzip -d\n'
+    fi
+    gzip -n -6 - | base64_encode
+    printf 'EOF\n'
+}
+
+
 file_as_code () {
     declare src="$1"
     declare dst="$2"
-    declare mode boundary
+    declare mode
 
     if [[ -d "$src" ]]; then
         throw "${src} is a directory. directories are not supported"
@@ -602,37 +615,32 @@ file_as_code () {
         throw "${src} does not exist"
     fi
 
-    boundary="EOF-$(md5 <<< "$dst")"
-
     if [[ -f "$src" ]]; then
         mode=$(set -e; file_mode "$src")
     fi
 
-    declare dst_quoted
-    dst_quoted=$(set -e; quoted "$dst")
-
-    cat <<EOF
-base64_decode <<"${boundary}" | gzip -d >${dst_quoted}
-EOF
-
-    gzip -n -6 - <"$src" | base64_encode
-
-    cat <<EOF
-${boundary}
-EOF
+    stdin_as_code "$dst" <"$src"
 
     if [[ -f "$src" ]]; then
-        cat <<EOF
-chmod ${mode} ${dst_quoted}
-EOF
+        printf 'chmod %s %q\n' "$mode" "$dst"
     fi
 
-    declare log_message_quoted
-    log_message_quoted=$(set -e; quoted "copied ${src} to ${dst} on the target")
+    printf 'log_debug %q\n' "copied ${src} to ${dst} on the target"
+}
 
-    cat <<EOF
-log_debug ${log_message_quoted}
-EOF
+
+stdin_as_function () {
+    declare file_id="$1"
+
+    file_id_hash=$(md5 <<< "$file_id")
+
+    printf 'drop_%s_body () {\n' "$file_id_hash"
+
+    stdin_as_code
+
+    printf '}\n'
+
+    printf 'log_debug %q\n' "shipped STDIN as the file id ${file_id}"
 }
 
 
@@ -653,31 +661,16 @@ file_as_function () {
 
     if [[ -f "$src" ]]; then
         mode=$(set -e; file_mode "$src")
+        printf 'AUTOMATED_DROP_%s_MODE=%s\n' "${file_id_hash^^}" "$mode"
     fi
 
-    cat <<EOF
-drop_${file_id_hash}_body () {
-    base64_decode <<"EOF-${file_id_hash}" | gzip -d
-EOF
+    printf 'drop_%s_body () {\n' "$file_id_hash"
 
-    gzip -n -6 - <"$src" | base64_encode
+    stdin_as_code <"$src"
 
-    cat <<EOF
-EOF-${file_id_hash}
-}
-EOF
-    if [[ -f "$src" ]]; then
-        cat <<EOF
-AUTOMATED_DROP_${file_id_hash^^}_MODE=${mode}
-EOF
-    fi
+    printf '}\n'
 
-    declare log_message_quoted
-    log_message_quoted=$(set -e; quoted "shipped ${src} as the file id ${file_id}")
-
-    cat <<EOF
-log_debug ${log_message_quoted}
-EOF
+    printf 'log_debug %q\n' "shipped ${src} as the file id ${file_id}"
 }
 
 
