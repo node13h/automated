@@ -37,8 +37,29 @@ source "${PROG_DIR%/}/libautomated.sh"
 # shellcheck disable=SC1090
 source "${PROG_DIR%/}/automated.sh"
 
+
+test_stdin_as_function () {
+    declare rc
+
+    set +e
+    (
+        set -e
+        assert_stdout "printf 'Hello\nWorld\n' | stdin_as_function my-file-id" - <<EOF
+drop_85f3735d27bcffbd74d4d5b092e52da0_body () {
+    base64_decode <<"EOF-85f3735d27bcffbd74d4d5b092e52da0" | gzip -d
+H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
+EOF-85f3735d27bcffbd74d4d5b092e52da0
+}
+EOF
+    )
+    rc="$?"
+    set -e
+
+    return "$rc"
+}
+
 test_file_as_function_file () {
-    declare rc temp_file temp_file_quoted owner mode
+    declare rc temp_file temp_file_quoted mode
     temp_file=$(mktemp)
 
     set +e
@@ -48,19 +69,18 @@ test_file_as_function_file () {
 Hello
 World
 EOF
-        owner=$(stat -c '%U:%G' "$temp_file")
         mode=$(stat -c '%#03a' "$temp_file")
         temp_file_quoted=$(printf '%q' "$temp_file")
 
-        assert_stdout "file_as_function ${temp_file_quoted} my-file-id" - <<EOF
+        assert_stdout "file_as_function ${temp_file_quoted} my-file-id" - <<EOM
+AUTOMATED_DROP_85F3735D27BCFFBD74D4D5B092E52DA0_MODE=${mode}
 drop_85f3735d27bcffbd74d4d5b092e52da0_body () {
-    base64_decode <<"EOF-85f3735d27bcffbd74d4d5b092e52da0" | gzip -d
+base64_decode <<"EOF" | gzip -d
 H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
-EOF-85f3735d27bcffbd74d4d5b092e52da0
-}
-AUTOMATED_DROP_85F3735D27BCFFBD74D4D5B092E52DA0_MODE=0600
-log_debug shipped\ ${temp_file_quoted}\ as\ the\ file\ id\ my-file-id
 EOF
+}
+log_debug shipped\ ${temp_file_quoted}\ as\ the\ file\ id\ my-file-id
+EOM
     )
     rc="$?"
     set -e
@@ -71,7 +91,7 @@ EOF
 }
 
 test_file_as_function_id_defaults_to_path () {
-    declare rc temp_file temp_file_quoted name_md5 owner mode
+    declare rc temp_file temp_file_quoted name_md5 mode
     temp_file=$(mktemp)
 
     set +e
@@ -81,20 +101,19 @@ test_file_as_function_id_defaults_to_path () {
 Hello
 World
 EOF
-        owner=$(stat -c '%U:%G' "$temp_file")
         mode=$(stat -c '%#03a' "$temp_file")
         temp_file_quoted=$(printf '%q' "$temp_file")
         name_md5=$(md5sum -b - <<< "$temp_file" | cut -f 1 -d ' ')
 
-        assert_stdout "file_as_function ${temp_file_quoted}" - <<EOF
+        assert_stdout "file_as_function ${temp_file_quoted}" - <<EOM
+AUTOMATED_DROP_${name_md5^^}_MODE=${mode}
 drop_${name_md5}_body () {
-    base64_decode <<"EOF-${name_md5}" | gzip -d
+base64_decode <<"EOF" | gzip -d
 H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
-EOF-${name_md5}
-}
-AUTOMATED_DROP_${name_md5^^}_MODE=0600
-log_debug shipped\ ${temp_file_quoted}\ as\ the\ file\ id\ ${temp_file_quoted}
 EOF
+}
+log_debug shipped\ ${temp_file_quoted}\ as\ the\ file\ id\ ${temp_file_quoted}
+EOM
     )
     rc="$?"
     set -e
@@ -105,18 +124,14 @@ EOF
 }
 
 test_file_as_function_pipe () {
-    declare owner
-
-    owner=$(stat -c '%U:%G' '/dev/fd/0')
-
-    assert_stdout "file_as_function /dev/fd/0 my-file-id <<<'Hello World'" <(cat <<EOF
+    assert_stdout "file_as_function /dev/fd/0 my-file-id <<<'Hello World'" <(cat <<EOM
 drop_85f3735d27bcffbd74d4d5b092e52da0_body () {
-    base64_decode <<"EOF-85f3735d27bcffbd74d4d5b092e52da0" | gzip -d
+base64_decode <<"EOF" | gzip -d
 H4sIAAAAAAAAA/NIzcnJVwjPL8pJ4QIA4+WVsAwAAAA=
-EOF-85f3735d27bcffbd74d4d5b092e52da0
+EOF
 }
 log_debug shipped\ /dev/fd/0\ as\ the\ file\ id\ my-file-id
-EOF
+EOM
 )
 
 }
@@ -221,13 +236,13 @@ EOF
         mode=$(stat -c '%#03a' "$temp_file")
         temp_file_quoted=$(printf '%q' "$temp_file")
 
-        assert_stdout "file_as_code ${temp_file_quoted} /tmp/dst" - <<EOF
-base64_decode <<"EOF-d075c6918aed70a32aaebbd10eb9ecab" | gzip -d >/tmp/dst
+        assert_stdout "file_as_code ${temp_file_quoted} /tmp/dst" - <<EOM
+base64_decode <<"EOF" | gzip -d >/tmp/dst
 H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
-EOF-d075c6918aed70a32aaebbd10eb9ecab
+EOF
 chmod ${mode} /tmp/dst
 log_debug copied\ ${temp_file_quoted}\ to\ /tmp/dst\ on\ the\ target
-EOF
+EOM
     )
     rc="$?"
     set -e
@@ -242,12 +257,12 @@ test_file_as_code_pipe () {
 
     mode=$(stat -c '%#03a' '/dev/fd/0')
 
-    assert_stdout "file_as_code /dev/fd/0 /tmp/dst <<<'Hello World'" <(cat <<EOF
-base64_decode <<"EOF-d075c6918aed70a32aaebbd10eb9ecab" | gzip -d >/tmp/dst
+    assert_stdout "file_as_code /dev/fd/0 /tmp/dst <<<'Hello World'" <(cat <<EOM
+base64_decode <<"EOF" | gzip -d >/tmp/dst
 H4sIAAAAAAAAA/NIzcnJVwjPL8pJ4QIA4+WVsAwAAAA=
-EOF-d075c6918aed70a32aaebbd10eb9ecab
-log_debug copied\ /dev/fd/0\ to\ /tmp/dst\ on\ the\ target
 EOF
+log_debug copied\ /dev/fd/0\ to\ /tmp/dst\ on\ the\ target
+EOM
 )
 }
 
@@ -724,6 +739,7 @@ test_file_owner_fail () {
 }
 
 suite () {
+    shelter_run_test_class upload test_stdin_as_function_
     shelter_run_test_class upload test_file_as_function_
     shelter_run_test_class upload test_drop_
     shelter_run_test_class upload test_file_as_code_
