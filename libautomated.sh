@@ -243,13 +243,7 @@ throw () {
 to_file () {
     declare target_path="$1"
     declare callback="${2:-}"
-    declare restore_pipefail mtime_before mtime_after
-
-    # diff will return non-zero exit code if file differs, therefore
-    # pipefail shell attribute should be disabled for this
-    # special case
-    restore_pipefail=$(shopt -p -o pipefail)
-    set +o pipefail
+    declare mtime_before mtime_after
 
     if [[ -e "$target_path" ]]; then
         mtime_before=$(set -e; file_mtime "$target_path" 2>/dev/null <&-)
@@ -258,7 +252,27 @@ to_file () {
     fi
 
     if cmd_is_available 'diff' <&- && cmd_is_available 'patch' <&-; then
-        diff -duaN "$target_path" - | tee >(printable_only | text_block "$1" | to_debug BRIGHT_BLACK >/dev/null) | patch --binary -s -p0 "$target_path"
+        (
+            set +e
+
+            diff -duaN "$target_path" - | tee >(printable_only | text_block "$1" | to_debug BRIGHT_BLACK >/dev/null) | patch -s -p0 "$target_path" >/dev/null
+
+            declare -a exit_codes=("${PIPESTATUS[@]}")
+
+            set -e
+
+            if [[ "${exit_codes[0]}" -eq 0 ]]; then
+                # No diff and we don't care about the patch exit code
+                log_debug "${target_path} is up to date" <&-
+                exit 0
+            elif [[ "${exit_codes[0]}" -gt 1 ]]; then
+                log_error "diff ${target_path} failed" <&-
+                exit "${exit_codes[0]}"
+            elif [[ "${exit_codes[2]}" -gt 0 ]]; then
+                log_error "patch ${target_path} failed" <&-
+                exit "${exit_codes[2]}"
+            fi
+        )
     else
         log_debug 'Please consider installing patch and diff commands to enable diff support for to_file()' <&-
 
@@ -270,8 +284,6 @@ to_file () {
     if [[ -n "$callback" ]] && [[ "$mtime_before" -ne "$mtime_after" ]]; then
         eval "$callback"
     fi
-
-    eval "$restore_pipefail"
 }
 
 
