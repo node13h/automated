@@ -483,6 +483,67 @@ test_to_file_correct () {
     return "$rc"
 }
 
+test_to_file_existing () {
+    declare rc temp_dir
+
+    # Ensure the test environment has the patch command.
+    # For more information see the to_file() source
+    assert_success 'command -v patch >/dev/null' 'Please install the patch command'
+
+    temp_dir=$(mktemp -d)
+
+    set +e
+    (
+        set -e
+
+        temp_dir_quoted=$(printf '%q' "$temp_dir")
+
+        printf 'Hello\nWorld\n' >"${temp_dir%/}/test.txt"
+
+        printf 'Hello\r\nWorld\r\n' | to_file "${temp_dir%/}/test.txt"
+        assert_stdout "cat ${temp_dir_quoted%/}/test.txt" <(printf 'Hello\r\nWorld\r\n')
+
+        printf 'Hello\nWorld\n' | to_file "${temp_dir%/}/test.txt"
+        assert_stdout "cat ${temp_dir_quoted%/}/test.txt" <(printf 'Hello\nWorld\n')
+    )
+    rc="$?"
+    set -e
+
+    rm -f -- "${temp_dir%/}/test.txt"
+    rmdir -- "$temp_dir"
+
+    return "$rc"
+}
+
+test_to_file_no_change () {
+    declare rc temp_dir
+
+    # Ensure the test environment has the patch command.
+    # For more information see the to_file() source
+    assert_success 'command -v patch >/dev/null' 'Please install the patch command'
+
+    temp_dir=$(mktemp -d)
+
+    set +e
+    (
+        set -e
+
+        temp_dir_quoted=$(printf '%q' "$temp_dir")
+
+        printf 'Hello\nWorld\n' >"${temp_dir%/}/test.txt"
+
+        printf 'Hello\nWorld\n' | to_file "${temp_dir%/}/test.txt"
+        assert_stdout "cat ${temp_dir_quoted%/}/test.txt" <(printf 'Hello\nWorld\n')
+    )
+    rc="$?"
+    set -e
+
+    rm -f -- "${temp_dir%/}/test.txt"
+    rmdir -- "$temp_dir"
+
+    return "$rc"
+}
+
 test_to_file_callback () {
     declare rc temp_dir
 
