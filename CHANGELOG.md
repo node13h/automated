@@ -6,10 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-- `stdin_as_function()`
+- `stdin_as_function()`.
+- `CHANGELOG.md`.
 
 ### Changed
 - Refactored file shipping functions.
+- Made `to_file()` more portable. Works on OpenBSD now.
 
 
 ## [0.3.3] - 2022-01-02
