@@ -251,7 +251,15 @@ to_file () {
         mtime_before=0
     fi
 
+    declare diff_mode
     if cmd_is_available 'diff' <&- && cmd_is_available 'patch' <&-; then
+        diff_mode=1
+    else
+        log_debug 'Please consider installing patch and diff commands to enable diff support for to_file()' <&-
+        diff_mode=0
+    fi
+
+    if [[ -e "$target_path" ]] && is_true "$diff_mode"; then
         (
             set +e
 
@@ -274,8 +282,6 @@ to_file () {
             fi
         )
     else
-        log_debug 'Please consider installing patch and diff commands to enable diff support for to_file()' <&-
-
         tee >(printable_only | text_block "$1" | to_debug BRIGHT_BLACK >/dev/null) >"$target_path"
     fi
 
