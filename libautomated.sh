@@ -120,7 +120,7 @@ text_block () {
     declare sed_replacement_end
     sed_replacement_end=$(sed_replacement "END ${name}")
 
-    sed -u -e 1s/^/"${sed_replacement_begin}"\\n/ -e \$s/$/\\n"${sed_replacement_end}"/
+    sed -u -e 1s/^/"${sed_replacement_begin}"\\$'\n'/ -e \$s/$/\\$'\n'"${sed_replacement_end}"/
 }
 
 
