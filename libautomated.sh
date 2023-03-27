@@ -441,10 +441,31 @@ run_in_tmux () {
 
     mkfifo "$fifo_file"
 
+    declare tmux_version tmux_major tmux_minor
+    tmux_version=$(tmux_command -V)
+
+    if [[ "$tmux_version" =~ ^tmux\ ([0-9]+)\.([0-9]+) ]]; then
+       tmux_major="${BASH_REMATCH[1]}"
+       tmux_minor="${BASH_REMATCH[2]}"
+    else
+        throw "Failed to parse tmux version ${tmux_version}"
+    fi
+
     tmux_command \
         new-session \
         -d \
         "/usr/bin/env bash ${fifo_file_quoted}"
+
+    # https://github.com/tmux/tmux/issues/3220
+    if [[ "$tmux_major" -eq 3 && "$tmux_minor" -gt 2 ]] || [[ "$tmux_major" -gt 3 ]]; then
+        declare current_uid
+        current_uid=$(id -u)
+        if [[ "$current_uid" -ne "$AUTOMATED_OWNER_UID" ]]; then
+            declare owner_username
+            owner_username=$(id -un "$AUTOMATED_OWNER_UID")
+            tmux_command server-access -aw "$owner_username"
+        fi
+    fi
 
     # shellcheck disable=SC2094
     {
