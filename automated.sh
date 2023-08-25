@@ -477,7 +477,6 @@ execute () {
     declare force_sudo_password=FALSE
 
     declare handler rc do_attach multiplexer
-    declare -a output_processor
 
     # Loop until SUDO password is accepted
     while true; do
@@ -494,26 +493,27 @@ execute () {
 
         log_debug "Executing on ${target}"
 
-        if is_true "$AUTOMATED_PREFIX_TARGET_OUTPUT"; then
-            output_processor=(prefixed_lines "${target}: ")
-        else
-            output_processor=(cat)
-        fi
-
         set +e
         (
             set -e
 
             # coproc is used to pass the exit code from the process substitution
-            # to the main thread.
+            # to the main thread so we can catch both handler command and script
+            # render errors.
             declare cpid
             coproc { read -r exit_code; exit "$exit_code"; }
             cpid="$COPROC_PID"
 
             # shellcheck disable=SC2064
-            handler_command "$force_sudo_password" > >("${output_processor[@]}") 2> >("${output_processor[@]}" >&2) < <(trap "printf -- '%s\n' \"\$?\" >&\"${COPROC[1]}\"" EXIT; rendered_script "$target" "$command")
+            {
+                if is_true "$AUTOMATED_PREFIX_TARGET_OUTPUT"; then
+                    handler_command "$force_sudo_password" > >(prefixed_lines "${target}: ") 2> >(prefixed_lines "${target}: " >&2)
+                else
+                    handler_command "$force_sudo_password"
+                fi
+            } < <(trap "printf -- '%s\n' \"\$?\" >&\"${COPROC[1]}\"" EXIT; rendered_script "$target" "$command")
 
-            # wait will return the exit code of the coproc
+            # This wait will return the exit code of the coproc.
             wait "$cpid"
         )
         rc="$?"
