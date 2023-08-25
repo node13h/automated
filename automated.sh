@@ -32,6 +32,8 @@ AUTOMATED_SUDO_PASSWORDLESS="${AUTOMATED_SUDO_PASSWORDLESS:-FALSE}"
 AUTOMATED_SUDO_PASSWORD_ON_STDIN="${AUTOMATED_SUDO_PASSWORD_ON_STDIN:-FALSE}"
 AUTOMATED_SUDO_ASK_PASSWORD_CMD="${AUTOMATED_SUDO_ASK_PASSWORD_CMD:-ask_sudo_password}"
 AUTOMATED_FUNCTRACE_DEPTH="${AUTOMATED_FUNCTRACE_DEPTH:-2}"
+AUTOMATED_SINGLETON_ENABLE="${AUTOMATED_SINGLETON_ENABLE:-FALSE}"
+AUTOMATED_SINGLETON_LOCK_FILE="${AUTOMATED_SINGLETON_LOCK_FILE:-/tmp/automated-lock}"
 
 declare -a EXPORT_VARS=()
 declare -a EXPORT_FUNCTIONS=()
@@ -229,6 +231,14 @@ OPTIONS:
                               Will be eval'd.
                               Default: ${AUTOMATED_SSH_CMD}
                               Env: AUTOMATED_SSH_CMD
+  --singleton                 Prevent multiple copies of the script from being
+                              executed in parallel.
+                              Default: ${AUTOMATED_SINGLETON_ENABLE}
+                              Env: AUTOMATED_SINGLETON_ENABLE
+  --singleton-lock-file       Remote lock file to use for --singleton.
+                              Real filename will be suffixed with uid.
+                              Default: ${AUTOMATED_SINGLETON_LOCK_FILE}
+                              Env: AUTOMATED_SINGLETON_LOCK_FILE
 
 EOF
 }
@@ -348,14 +358,34 @@ if is_true "${AUTOMATED_DEBUG}"; then
   trap 'log_cmd_trap' DEBUG
 fi
 
-EOF
-
-    # This block has to be the last block in the script as it
-    # joins the STDIN of this script to the STDIN of the executed command
-    if is_true "$AUTOMATED_PASS_STDIN"; then
-        cat <<EOF
 {
+
+EOF
+    if is_true "$AUTOMATED_SINGLETON_ENABLE"; then
+        cat <<EOF
+    (
+        if ! flock -x -n "\$AUTOMATED_SINGLETON_LOCK_FD"; then
+            throw "Another instance of automated script is already running"
+        fi
+
+        {
+
+            ${command}
+
+        # Close AUTOMATED_SINGLETON_LOCK_FD to prevent it from leaking into
+        # sub-processes (conmon for example) which may stay resident
+        # and retain the lock.
+        } {AUTOMATED_SINGLETON_LOCK_FD}>&-
+
+    ) {AUTOMATED_SINGLETON_LOCK_FD}>$(quoted "$AUTOMATED_SINGLETON_LOCK_FILE")-"\$(id -u)"
+EOF
+    else
+        cat <<EOF
     ${command}
+EOF
+    fi
+
+    cat <<"EOF"
 
     log_debug 'done'
 
@@ -363,6 +393,12 @@ EOF
       trap - DEBUG
     fi
 
+EOF
+
+    # This block has to be the last block in the script as it
+    # joins the STDIN of this script to the STDIN of the executed command
+    if is_true "$AUTOMATED_PASS_STDIN"; then
+        cat <<EOF
     # exit() is required so we don't try to execute the STDIN in case
     # no one has consumed it.
     # Exit code is always zero if we've got to this point (set -e in effect)
@@ -373,14 +409,6 @@ EOF
         cat
     else
         cat <<EOF
-{
-    ${command}
-
-    log_debug 'done'
-
-    if is_true "${AUTOMATED_DEBUG}"; then
-      trap - DEBUG
-    fi
 }
 EOF
     fi
@@ -673,6 +701,15 @@ parse_args () {
                 else
                     throw "Could not read inventory file"
                 fi
+                ;;
+
+            --singleton)
+                AUTOMATED_SINGLETON_ENABLE=TRUE
+                ;;
+
+            --singleton-lock-file)
+                AUTOMATED_SINGLETON_LOCK_FILE="$2"
+                shift
                 ;;
 
             --local)
