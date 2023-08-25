@@ -507,7 +507,11 @@ execute () {
             # shellcheck disable=SC2064
             {
                 if is_true "$AUTOMATED_PREFIX_TARGET_OUTPUT"; then
-                    handler_command "$force_sudo_password" > >(prefixed_lines "${target}: ") 2> >(prefixed_lines "${target}: " >&2)
+                    (
+                        handler_command "$force_sudo_password" > >(prefixed_lines "${target}: ") 2> >(prefixed_lines "${target}: " >&2)
+                        # Wait for the comand substitution subshells.
+                        wait
+                    )
                 else
                     handler_command "$force_sudo_password"
                 fi

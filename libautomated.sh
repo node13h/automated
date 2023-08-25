@@ -263,7 +263,7 @@ to_file () {
         (
             set +e
 
-            diff -duaN "$target_path" - | tee >(printable_only | text_block "$1" | to_debug BRIGHT_BLACK >/dev/null) | patch -s -p0 "$target_path" >/dev/null
+            diff -duaN "$target_path" - | tee >(printable_only | text_block "$target_path" | to_debug BRIGHT_BLACK >/dev/null) | patch -s -p0 "$target_path" >/dev/null
 
             declare -a exit_codes=("${PIPESTATUS[@]}")
 
@@ -282,7 +282,7 @@ to_file () {
             fi
         )
     else
-        tee >(printable_only | text_block "$1" | to_debug BRIGHT_BLACK >/dev/null) >"$target_path"
+        tee >(printable_only | text_block "$target_path" | to_debug BRIGHT_BLACK >/dev/null) >"$target_path"
     fi
 
     mtime_after=$(set -e; file_mtime "$target_path")
