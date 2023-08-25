@@ -353,7 +353,7 @@ rendered_script () {
     fi
 
     cat <<"EOF"
-if is_true "${AUTOMATED_DEBUG}"; then
+if is_true "$AUTOMATED_DEBUG"; then
   set -o functrace
   trap 'log_cmd_trap' DEBUG
 fi
@@ -389,7 +389,7 @@ EOF
 
     log_debug 'done'
 
-    if is_true "${AUTOMATED_DEBUG}"; then
+    if is_true "$AUTOMATED_DEBUG"; then
       trap - DEBUG
     fi
 
