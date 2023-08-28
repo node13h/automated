@@ -493,6 +493,8 @@ execute () {
 
         log_debug "Executing on ${target}"
 
+        # TODO: AUT-124 Try replacing coproc with a pipeline, and using PIPESTATUS
+        # to get exit codes of both handler_command and rendered_script.
         set +e
         (
             set -e

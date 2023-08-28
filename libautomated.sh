@@ -263,6 +263,9 @@ to_file () {
         (
             set +e
 
+            # TODO: AUT-125 Wait for process substitution subshell using { tee >(...); wait $!; }
+            # to prevent the script from moving onto the next command after the pipeline has
+            # completed, but the subshell is still sending output in background.
             diff -duaN "$target_path" - | tee >(printable_only | text_block "$target_path" | to_debug BRIGHT_BLACK >/dev/null) | patch -s -p0 "$target_path" >/dev/null
 
             declare -a exit_codes=("${PIPESTATUS[@]}")
@@ -282,6 +285,8 @@ to_file () {
             fi
         )
     else
+        # TODO: AUT-126 Write files atomically.
+        # shellcheck disable=SC2094
         tee >(printable_only | text_block "$target_path" | to_debug BRIGHT_BLACK >/dev/null) >"$target_path"
     fi
 
@@ -584,6 +589,7 @@ target_as_vars () {
 }
 
 
+# TODO: AUT-127 IPv6 addresses must be enclosed in square brackets.
 target_address_only () {
     declare target="$1"
     declare username address port
