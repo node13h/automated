@@ -32,6 +32,8 @@ AUTOMATED_SUDO_PASSWORDLESS="${AUTOMATED_SUDO_PASSWORDLESS:-FALSE}"
 AUTOMATED_SUDO_PASSWORD_ON_STDIN="${AUTOMATED_SUDO_PASSWORD_ON_STDIN:-FALSE}"
 AUTOMATED_SUDO_ASK_PASSWORD_CMD="${AUTOMATED_SUDO_ASK_PASSWORD_CMD:-ask_sudo_password}"
 AUTOMATED_FUNCTRACE_DEPTH="${AUTOMATED_FUNCTRACE_DEPTH:-2}"
+AUTOMATED_SINGLETON_ENABLE="${AUTOMATED_SINGLETON_ENABLE:-FALSE}"
+AUTOMATED_SINGLETON_LOCK_FILE="${AUTOMATED_SINGLETON_LOCK_FILE:-/tmp/automated-lock}"
 
 declare -a EXPORT_VARS=()
 declare -a EXPORT_FUNCTIONS=()
@@ -229,6 +231,14 @@ OPTIONS:
                               Will be eval'd.
                               Default: ${AUTOMATED_SSH_CMD}
                               Env: AUTOMATED_SSH_CMD
+  --singleton                 Prevent multiple copies of the script from being
+                              executed in parallel.
+                              Default: ${AUTOMATED_SINGLETON_ENABLE}
+                              Env: AUTOMATED_SINGLETON_ENABLE
+  --singleton-lock-file       Remote lock file to use for --singleton.
+                              Real filename will be suffixed with uid.
+                              Default: ${AUTOMATED_SINGLETON_LOCK_FILE}
+                              Env: AUTOMATED_SINGLETON_LOCK_FILE
 
 EOF
 }
@@ -343,10 +353,45 @@ rendered_script () {
     fi
 
     cat <<"EOF"
-if is_true "${AUTOMATED_DEBUG}"; then
+if is_true "$AUTOMATED_DEBUG"; then
   set -o functrace
   trap 'log_cmd_trap' DEBUG
 fi
+
+{
+
+EOF
+    if is_true "$AUTOMATED_SINGLETON_ENABLE"; then
+        cat <<EOF
+    (
+        if ! flock -x -n "\$AUTOMATED_SINGLETON_LOCK_FD"; then
+            throw "Another instance of automated script is already running"
+        fi
+
+        {
+
+            ${command}
+
+        # Close AUTOMATED_SINGLETON_LOCK_FD to prevent it from leaking into
+        # sub-processes (conmon for example) which may stay resident
+        # and retain the lock.
+        } {AUTOMATED_SINGLETON_LOCK_FD}>&-
+
+    ) {AUTOMATED_SINGLETON_LOCK_FD}>$(quoted "$AUTOMATED_SINGLETON_LOCK_FILE")-"\$(id -u)"
+EOF
+    else
+        cat <<EOF
+    ${command}
+EOF
+    fi
+
+    cat <<"EOF"
+
+    log_debug 'done'
+
+    if is_true "$AUTOMATED_DEBUG"; then
+      trap - DEBUG
+    fi
 
 EOF
 
@@ -354,15 +399,6 @@ EOF
     # joins the STDIN of this script to the STDIN of the executed command
     if is_true "$AUTOMATED_PASS_STDIN"; then
         cat <<EOF
-{
-    ${command}
-
-    log_debug 'done'
-
-    if is_true "${AUTOMATED_DEBUG}"; then
-      trap - DEBUG
-    fi
-
     # exit() is required so we don't try to execute the STDIN in case
     # no one has consumed it.
     # Exit code is always zero if we've got to this point (set -e in effect)
@@ -373,14 +409,6 @@ EOF
         cat
     else
         cat <<EOF
-{
-    ${command}
-
-    log_debug 'done'
-
-    if is_true "${AUTOMATED_DEBUG}"; then
-      trap - DEBUG
-    fi
 }
 EOF
     fi
@@ -449,7 +477,6 @@ execute () {
     declare force_sudo_password=FALSE
 
     declare handler rc do_attach multiplexer
-    declare -a output_processor
 
     # Loop until SUDO password is accepted
     while true; do
@@ -466,26 +493,33 @@ execute () {
 
         log_debug "Executing on ${target}"
 
-        if is_true "$AUTOMATED_PREFIX_TARGET_OUTPUT"; then
-            output_processor=(prefixed_lines "${target}: ")
-        else
-            output_processor=(cat)
-        fi
-
+        # TODO: AUT-124 Try replacing coproc with a pipeline, and using PIPESTATUS
+        # to get exit codes of both handler_command and rendered_script.
         set +e
         (
             set -e
 
             # coproc is used to pass the exit code from the process substitution
-            # to the main thread.
+            # to the main thread so we can catch both handler command and script
+            # render errors.
             declare cpid
             coproc { read -r exit_code; exit "$exit_code"; }
             cpid="$COPROC_PID"
 
             # shellcheck disable=SC2064
-            handler_command "$force_sudo_password" > >("${output_processor[@]}") 2> >("${output_processor[@]}" >&2) < <(trap "printf -- '%s\n' \"\$?\" >&\"${COPROC[1]}\"" EXIT; rendered_script "$target" "$command")
+            {
+                if is_true "$AUTOMATED_PREFIX_TARGET_OUTPUT"; then
+                    (
+                        handler_command "$force_sudo_password" > >(prefixed_lines "${target}: ") 2> >(prefixed_lines "${target}: " >&2)
+                        # Wait for the comand substitution subshells.
+                        wait
+                    )
+                else
+                    handler_command "$force_sudo_password"
+                fi
+            } < <(trap "printf -- '%s\n' \"\$?\" >&\"${COPROC[1]}\"" EXIT; rendered_script "$target" "$command")
 
-            # wait will return the exit code of the coproc
+            # This wait will return the exit code of the coproc.
             wait "$cpid"
         )
         rc="$?"
@@ -673,6 +707,15 @@ parse_args () {
                 else
                     throw "Could not read inventory file"
                 fi
+                ;;
+
+            --singleton)
+                AUTOMATED_SINGLETON_ENABLE=TRUE
+                ;;
+
+            --singleton-lock-file)
+                AUTOMATED_SINGLETON_LOCK_FILE="$2"
+                shift
                 ;;
 
             --local)
