@@ -675,9 +675,19 @@ stdin_as_function () {
 
     printf 'drop_%s_body () {\n' "$file_id_hash"
 
-    stdin_as_code
+    declare code_sha256
+
+    # Waiting for process substitutions using wait $! is not supported in Bash 4.3
+    # or earlier. However, this function is mostly executed on locally on
+    # the controlling workstation, which is expected to have much more recent
+    # Bash version.
+    {
+        code_sha256=$(set -e; stdin_as_code | { tee >(cat >&${stdout}); wait $!; } | sha256sum | cut -f 1 -d ' ')
+    } {stdout}>&1
 
     printf '}\n'
+
+    printf 'AUTOMATED_DROP_%s_SHA256=%s\n' "${file_id_hash^^}" "$code_sha256"
 
     printf 'log_debug %q\n' "shipped STDIN as the file id ${file_id}"
 }
@@ -705,9 +715,19 @@ file_as_function () {
 
     printf 'drop_%s_body () {\n' "$file_id_hash"
 
-    stdin_as_code <"$src"
+    declare code_sha256
+
+    # Waiting for process substitutions using wait $! is not supported in Bash 4.3
+    # or earlier. However, this function is mostly executed on locally on
+    # the controlling workstation, which is expected to have much more recent
+    # Bash version.
+    {
+        code_sha256=$(set -e; stdin_as_code <"$src" | { tee >(cat >&${stdout}); wait $!; } | sha256sum | cut -f 1 -d ' ')
+    } {stdout}>&1
 
     printf '}\n'
+
+    printf 'AUTOMATED_DROP_%s_SHA256=%s\n' "${file_id_hash^^}" "$code_sha256"
 
     printf 'log_debug %q\n' "shipped ${src} as the file id ${file_id}"
 }
@@ -750,7 +770,7 @@ drop () {
     declare file_id="$1"
     declare dst="${2:-}"
 
-    declare mode file_id_hash mode_var
+    declare mode owner file_id_hash mode_var
 
     file_id_hash=$(md5 <<< "$file_id")
 
@@ -764,11 +784,38 @@ drop () {
             mode="${3:-}"
         fi
 
-        "drop_${file_id_hash}_body" "${file_id}" >"$dst"
+        owner="${4:-}"
+
+        # TODO: AUT-128 Support writing to pipes.
+
+        if ! [[ -e "$dst" ]]; then
+            touch "$dst"
+        fi
 
         if [[ -n "${mode:-}" ]]; then
             chmod "$mode" "$dst"
         fi
+
+        if [[ -n "${owner:-}" ]]; then
+            chown "$owner" "$dst"
+        fi
+
+        declare code_sha256_var
+        code_sha256_var="AUTOMATED_DROP_${file_id_hash^^}_SHA256"
+
+        if [[ -n "${!code_sha256_var:-}" ]]; then
+            log_debug "Checking if ${dst} needs updating"
+            declare code_sha256
+            code_sha256=$(stdin_as_code < "$dst" | sha256sum | cut -f 1 -d ' ')
+            if [[ "$code_sha256" == "${!code_sha256_var}" ]]; then
+                log_debug "${dst} is already up-to-date"
+                return 0
+            fi
+        fi
+
+        log_debug "Writing ${dst}"
+        # TODO: AUT-126 Write files atomically.
+        "drop_${file_id_hash}_body" "${file_id}" >"$dst"
     else
         "drop_${file_id_hash}_body" "$file_id"
     fi

@@ -38,19 +38,21 @@ source "${PROG_DIR%/}/libautomated.sh"
 source "${PROG_DIR%/}/automated.sh"
 
 
-test_stdin_as_function () {
+test_stdin_as_function_correct () {
     declare rc
 
     set +e
     (
         set -e
-        assert_stdout "printf 'Hello\nWorld\n' | stdin_as_function my-file-id" - <<EOF
+        assert_stdout "printf 'Hello\nWorld\n' | stdin_as_function my-file-id" - <<EOM
 drop_85f3735d27bcffbd74d4d5b092e52da0_body () {
-    base64_decode <<"EOF-85f3735d27bcffbd74d4d5b092e52da0" | gzip -d
+base64_decode <<"EOF" | gzip -d
 H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
-EOF-85f3735d27bcffbd74d4d5b092e52da0
-}
 EOF
+}
+AUTOMATED_DROP_85F3735D27BCFFBD74D4D5B092E52DA0_SHA256=0b42ebd2054dede0b69c00da2b839855cb0cac48d051d4c9b2726eb9dcb358ad
+log_debug shipped\ STDIN\ as\ the\ file\ id\ my-file-id
+EOM
     )
     rc="$?"
     set -e
@@ -79,6 +81,7 @@ base64_decode <<"EOF" | gzip -d
 H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
 EOF
 }
+AUTOMATED_DROP_85F3735D27BCFFBD74D4D5B092E52DA0_SHA256=0b42ebd2054dede0b69c00da2b839855cb0cac48d051d4c9b2726eb9dcb358ad
 log_debug shipped\ ${temp_file_quoted}\ as\ the\ file\ id\ my-file-id
 EOM
     )
@@ -112,6 +115,7 @@ base64_decode <<"EOF" | gzip -d
 H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
 EOF
 }
+AUTOMATED_DROP_${name_md5^^}_SHA256=0b42ebd2054dede0b69c00da2b839855cb0cac48d051d4c9b2726eb9dcb358ad
 log_debug shipped\ ${temp_file_quoted}\ as\ the\ file\ id\ ${temp_file_quoted}
 EOM
     )
@@ -130,6 +134,7 @@ base64_decode <<"EOF" | gzip -d
 H4sIAAAAAAAAA/NIzcnJVwjPL8pJ4QIA4+WVsAwAAAA=
 EOF
 }
+AUTOMATED_DROP_85F3735D27BCFFBD74D4D5B092E52DA0_SHA256=de7581fb05b97ed2f39200991ddb46587a00b4c20249a5ff8e47478551188ea7
 log_debug shipped\ /dev/fd/0\ as\ the\ file\ id\ my-file-id
 EOM
 )
@@ -207,6 +212,52 @@ Hello
 World
 EOF
         assert_stdout "stat -c '%#03a' ${dst_quoted}" <<< '0750'
+
+    )
+    rc="$?"
+    set -e
+
+    rm -f -- "${temp_dir%/}/dst"
+    rmdir -- "$temp_dir"
+
+    return "$rc"
+}
+
+test_drop_file_no_update_needed () {
+    declare rc temp_dir dst_quoted
+    temp_dir=$(mktemp -d)
+
+    set +e
+    (
+        set -e
+
+        dst_quoted=$(printf '%q' "${temp_dir%/}/dst")
+
+        drop_85f3735d27bcffbd74d4d5b092e52da0_body () {
+            base64_decode <<"EOF" | gzip -d
+H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
+EOF
+        }
+
+        cat <<"EOF" >"${temp_dir%/}/dst"
+Hello
+World
+EOF
+        declare mtime_before
+        mtime_before=$(stat -c "%Y" "${temp_dir%/}/dst")
+
+        # mtime has one second granularity, hence the need to wait
+        # just slightly over one second to make sure mtime
+        # after the update will actually be different.
+        sleep 1.1
+
+        # SHA256 of the _code_, not the file contents.
+        # shellcheck disable=SC2034
+        AUTOMATED_DROP_85F3735D27BCFFBD74D4D5B092E52DA0_SHA256=0b42ebd2054dede0b69c00da2b839855cb0cac48d051d4c9b2726eb9dcb358ad
+
+        assert_success "drop my-file-id ${dst_quoted}"
+
+        assert_stdout "stat -c '%Y' ${dst_quoted}" <<< "$mtime_before"
 
     )
     rc="$?"
