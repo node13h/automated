@@ -521,8 +521,7 @@ test_to_file_correct () {
 
         temp_dir_quoted=$(printf '%q' "$temp_dir")
 
-        echo 'Hello World' | to_file "${temp_dir%/}/test.txt"
-
+        assert_success "echo 'Hello World' | to_file ${temp_dir_quoted%/}/test.txt"
         assert_stdout "cat ${temp_dir_quoted%/}/test.txt" - <<< 'Hello World'
     )
     rc="$?"
@@ -551,10 +550,10 @@ test_to_file_existing () {
 
         printf 'Hello\nWorld\n' >"${temp_dir%/}/test.txt"
 
-        printf 'Hello\r\nWorld\r\n' | to_file "${temp_dir%/}/test.txt"
+        assert_success "printf 'Hello\r\nWorld\r\n' | to_file ${temp_dir_quoted%/}/test.txt"
         assert_stdout "cat ${temp_dir_quoted%/}/test.txt" <(printf 'Hello\r\nWorld\r\n')
 
-        printf 'Hello\nWorld\n' | to_file "${temp_dir%/}/test.txt"
+        assert_success "printf 'Hello\nWorld\n' | to_file ${temp_dir_quoted%/}/test.txt"
         assert_stdout "cat ${temp_dir_quoted%/}/test.txt" <(printf 'Hello\nWorld\n')
     )
     rc="$?"
@@ -583,7 +582,7 @@ test_to_file_no_change () {
 
         printf 'Hello\nWorld\n' >"${temp_dir%/}/test.txt"
 
-        printf 'Hello\nWorld\n' | to_file "${temp_dir%/}/test.txt"
+        assert_success "printf 'Hello\nWorld\n' | to_file ${temp_dir_quoted%/}/test.txt"
         assert_stdout "cat ${temp_dir_quoted%/}/test.txt" <(printf 'Hello\nWorld\n')
     )
     rc="$?"
@@ -642,11 +641,13 @@ test_to_file_no_patch_correct () {
             command -v "$1" >/dev/null
         }
 
+        temp_dir_quoted=$(printf '%q' "$temp_dir")
+
         patch_command 'function' 'cmd_is_available' 'cmd_is_available_mock "$@"'
 
-        echo 'Hello World' | to_file "${temp_dir%/}/test.txt"
-
+        assert_success "echo 'Hello World' | to_file ${temp_dir_quoted%/}/test.txt"
         assert_stdout 'cat ${temp_dir%/}/test.txt' - <<< 'Hello World'
+
         unpatch_command 'cmd_is_available'
     )
     rc="$?"
@@ -893,6 +894,8 @@ main () {
     fi
 
     supported_shelter_versions 0.6 0.7
+
+    SHELTER_DEBUG=TRUE
 
     if [[ -n "${ENABLE_CI_MODE:-}" ]]; then
         mkdir -p junit
