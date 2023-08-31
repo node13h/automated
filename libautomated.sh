@@ -243,12 +243,15 @@ throw () {
 to_file () {
     declare target_path="$1"
     declare callback="${2:-}"
-    declare mtime_before mtime_after
 
-    if [[ -e "$target_path" ]]; then
-        mtime_before=$(set -e; file_mtime "$target_path" 2>/dev/null <&-)
-    else
-        mtime_before=0
+    if [[ -n "$callback" ]]; then
+        declare mtime_before mtime_after
+
+        if [[ -e "$target_path" ]]; then
+            mtime_before=$(set -e; file_mtime "$target_path" 2>/dev/null <&-)
+        else
+            mtime_before=0
+        fi
     fi
 
     declare diff_mode
@@ -290,10 +293,12 @@ to_file () {
         tee >(printable_only | text_block "$target_path" | to_debug BRIGHT_BLACK >/dev/null) >"$target_path"
     fi
 
-    mtime_after=$(set -e; file_mtime "$target_path")
+    if [[ -n "$callback" ]]; then
+        mtime_after=$(set -e; file_mtime "$target_path")
 
-    if [[ -n "$callback" ]] && [[ "$mtime_before" -ne "$mtime_after" ]]; then
-        eval "$callback"
+        if [[ "$mtime_before" -ne "$mtime_after" ]]; then
+            eval "$callback"
+        fi
     fi
 }
 
@@ -681,19 +686,9 @@ stdin_as_function () {
 
     printf 'drop_%s_body () {\n' "$file_id_hash"
 
-    declare code_sha256
-
-    # Waiting for process substitutions using wait $! is not supported in Bash 4.3
-    # or earlier. However, this function is mostly executed on locally on
-    # the controlling workstation, which is expected to have much more recent
-    # Bash version.
-    {
-        code_sha256=$(set -e; stdin_as_code | { tee >(cat >&${stdout}); wait $!; } | sha256sum | cut -f 1 -d ' ')
-    } {stdout}>&1
+    stdin_as_code
 
     printf '}\n'
-
-    printf 'AUTOMATED_DROP_%s_SHA256=%s\n' "${file_id_hash^^}" "$code_sha256"
 
     printf 'log_debug %q\n' "shipped STDIN as the file id ${file_id}"
 }
@@ -721,19 +716,9 @@ file_as_function () {
 
     printf 'drop_%s_body () {\n' "$file_id_hash"
 
-    declare code_sha256
-
-    # Waiting for process substitutions using wait $! is not supported in Bash 4.3
-    # or earlier. However, this function is mostly executed on locally on
-    # the controlling workstation, which is expected to have much more recent
-    # Bash version.
-    {
-        code_sha256=$(set -e; stdin_as_code <"$src" | { tee >(cat >&${stdout}); wait $!; } | sha256sum | cut -f 1 -d ' ')
-    } {stdout}>&1
+    stdin_as_code <"$src"
 
     printf '}\n'
-
-    printf 'AUTOMATED_DROP_%s_SHA256=%s\n' "${file_id_hash^^}" "$code_sha256"
 
     printf 'log_debug %q\n' "shipped ${src} as the file id ${file_id}"
 }
@@ -806,22 +791,7 @@ drop () {
             chown "$owner" "$dst"
         fi
 
-        declare code_sha256_var
-        code_sha256_var="AUTOMATED_DROP_${file_id_hash^^}_SHA256"
-
-        if [[ -n "${!code_sha256_var:-}" ]]; then
-            log_debug "Checking if ${dst} needs updating"
-            declare code_sha256
-            code_sha256=$(stdin_as_code < "$dst" | sha256sum | cut -f 1 -d ' ')
-            if [[ "$code_sha256" == "${!code_sha256_var}" ]]; then
-                log_debug "${dst} is already up-to-date"
-                return 0
-            fi
-        fi
-
-        log_debug "Writing ${dst}"
-        # TODO: AUT-126 Write files atomically.
-        "drop_${file_id_hash}_body" "${file_id}" >"$dst"
+        "drop_${file_id_hash}_body" "${file_id}" | to_file "$dst"
     else
         "drop_${file_id_hash}_body" "$file_id"
     fi

@@ -50,7 +50,6 @@ base64_decode <<"EOF" | gzip -d
 H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
 EOF
 }
-AUTOMATED_DROP_85F3735D27BCFFBD74D4D5B092E52DA0_SHA256=0b42ebd2054dede0b69c00da2b839855cb0cac48d051d4c9b2726eb9dcb358ad
 log_debug shipped\ STDIN\ as\ the\ file\ id\ my-file-id
 EOM
     )
@@ -81,7 +80,6 @@ base64_decode <<"EOF" | gzip -d
 H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
 EOF
 }
-AUTOMATED_DROP_85F3735D27BCFFBD74D4D5B092E52DA0_SHA256=0b42ebd2054dede0b69c00da2b839855cb0cac48d051d4c9b2726eb9dcb358ad
 log_debug shipped\ ${temp_file_quoted}\ as\ the\ file\ id\ my-file-id
 EOM
     )
@@ -115,7 +113,6 @@ base64_decode <<"EOF" | gzip -d
 H4sIAAAAAAAAA/NIzcnJ5wrPL8pJ4QIAMYNY2wwAAAA=
 EOF
 }
-AUTOMATED_DROP_${name_md5^^}_SHA256=0b42ebd2054dede0b69c00da2b839855cb0cac48d051d4c9b2726eb9dcb358ad
 log_debug shipped\ ${temp_file_quoted}\ as\ the\ file\ id\ ${temp_file_quoted}
 EOM
     )
@@ -134,7 +131,6 @@ base64_decode <<"EOF" | gzip -d
 H4sIAAAAAAAAA/NIzcnJVwjPL8pJ4QIA4+WVsAwAAAA=
 EOF
 }
-AUTOMATED_DROP_85F3735D27BCFFBD74D4D5B092E52DA0_SHA256=de7581fb05b97ed2f39200991ddb46587a00b4c20249a5ff8e47478551188ea7
 log_debug shipped\ /dev/fd/0\ as\ the\ file\ id\ my-file-id
 EOM
 )
@@ -250,10 +246,6 @@ EOF
         # just slightly over one second to make sure mtime
         # after the update will actually be different.
         sleep 1.1
-
-        # SHA256 of the _code_, not the file contents.
-        # shellcheck disable=SC2034
-        AUTOMATED_DROP_85F3735D27BCFFBD74D4D5B092E52DA0_SHA256=0b42ebd2054dede0b69c00da2b839855cb0cac48d051d4c9b2726eb9dcb358ad
 
         assert_success "drop my-file-id ${dst_quoted}"
 
