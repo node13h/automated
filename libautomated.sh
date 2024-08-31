@@ -451,12 +451,13 @@ run_in_tmux () {
 
     mkfifo "$fifo_file"
 
-    declare tmux_version tmux_major tmux_minor
+    declare tmux_version tmux_major tmux_minor tmux_version_regex
+    tmux_version_regex='^tmux ((next|openbsd)-)?([0-9]+)\.([0-9]+)'
     tmux_version=$(tmux_command -V)
 
-    if [[ "$tmux_version" =~ ^tmux\ ([0-9]+)\.([0-9]+) ]]; then
-       tmux_major="${BASH_REMATCH[1]}"
-       tmux_minor="${BASH_REMATCH[2]}"
+    if [[ "$tmux_version" =~ $tmux_version_regex ]]; then
+       tmux_major="${BASH_REMATCH[3]}"
+       tmux_minor="${BASH_REMATCH[4]}"
     else
         throw "Failed to parse tmux version ${tmux_version}"
     fi
